@@ -274,11 +274,11 @@ function PRBadge({
         </span>
 
         {/* Previous PR */}
-        {prevTime != null && prevTime > 0 && (
-          <span className="text-xs text-gray-400 -mt-0.5">
-            vorher <span className="font-mono">{formatTime(prevTime, pr.eventId, pr.type)}</span>
-          </span>
-        )}
+        <span className="text-xs text-gray-400 -mt-0.5">
+          {prevTime !== undefined
+            ? <>vorher <span className="font-mono">{formatTime(prevTime, pr.eventId, pr.type)}</span></>
+            : "vorher noch kein Resultat"}
+        </span>
 
         {/* Rankings / record badges */}
         <div className="flex gap-1 flex-wrap">

@@ -6,11 +6,9 @@ export function formatTime(
   if (cs <= 0) return cs === -1 ? "DNF" : "DNS";
 
   if (eventId === "333fm") {
-    // FMC results are stored as moves × 100
-    const moves = cs / 100;
-    return type === "single"
-      ? `${Math.round(moves)} Moves`
-      : `${moves.toFixed(2)} Moves`;
+    // Singles are stored as raw move count; means/averages are stored as moves × 100
+    if (type === "single") return `${cs} Moves`;
+    return `${(cs / 100).toFixed(2)} Moves`;
   }
 
   if (eventId === "333mbf") {
