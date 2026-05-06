@@ -153,17 +153,17 @@ async function importCompetitions(filePath: string): Promise<void> {
 }
 
 async function importPersons(filePath: string): Promise<Set<string>> {
-  console.log("Importing Swiss persons...");
-  await sql`DELETE FROM persons WHERE country_id = ${COUNTRY}`;
+  console.log("Importing all persons (worldwide)...");
+  await sql`TRUNCATE persons`;
 
   const swissIds = new Set<string>();
   const rows: { wca_id: string; sub_id: number; name: string; country_id: string }[] = [];
 
   for await (const row of readTSV(filePath)) {
     const countryId = col(row, "country_id", "countryId");
-    if (countryId !== COUNTRY) continue;
     const id = row["id"] ?? row["wca_id"] ?? "";
-    swissIds.add(id);
+    if (!id) continue;
+    if (countryId === COUNTRY) swissIds.add(id);
     rows.push({
       wca_id: id,
       sub_id: Number(row["subid"]) || 0,
@@ -182,7 +182,7 @@ async function importPersons(filePath: string): Promise<Set<string>> {
     `;
   });
 
-  console.log(`  Imported ${rows.length} persons`);
+  console.log(`  Imported ${deduped.length} persons (${swissIds.size} Swiss)`);
   return swissIds;
 }
 
@@ -226,11 +226,10 @@ async function importResults(filePath: string): Promise<void> {
 
 async function importRanks(
   filePath: string,
-  table: "ranks_single" | "ranks_average",
-  swissIds: Set<string>
+  table: "ranks_single" | "ranks_average"
 ): Promise<void> {
-  console.log(`Importing ${table}...`);
-  await sql`DELETE FROM ${sql(table)} WHERE person_id = ANY(${[...swissIds]})`;
+  console.log(`Importing ${table} (worldwide)...`);
+  await sql`TRUNCATE ${sql(table)}`;
 
   const rows: {
     person_id: string; event_id: string; best: number;
@@ -239,7 +238,7 @@ async function importRanks(
 
   for await (const row of readTSV(filePath)) {
     const personId = col(row, "person_id", "personId");
-    if (!swissIds.has(personId)) continue;
+    if (!personId) continue;
     rows.push({
       person_id:      personId,
       event_id:       col(row, "event_id",       "eventId"),
@@ -262,7 +261,7 @@ async function importRanks(
     `;
   });
 
-  console.log(`  Imported ${rows.length} ${table} entries`);
+  console.log(`  Imported ${deduped.length} ${table} entries`);
 }
 
 // Only import the top N global results per event for the rank_brackets table.
@@ -453,8 +452,8 @@ async function main() {
     const swissIds = await importPersons(personsFile);
     await importCompetitions(findTsv("Competitions"));
     await importResults(findTsv("Results"));
-    await importRanks(findTsv("ranks_single"), "ranks_single", swissIds);
-    await importRanks(findTsv("ranks_average"), "ranks_average", swissIds);
+    await importRanks(findTsv("ranks_single"), "ranks_single");
+    await importRanks(findTsv("ranks_average"), "ranks_average");
 
     try {
       const personContinentMap = await buildPersonContinentMap(
