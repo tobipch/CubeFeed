@@ -11,17 +11,19 @@
     "db:import": "tsx scripts/import-wca.ts"
   },
   "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
     "next": "^15.0.0",
+    "postgres": "^3.4.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "postgres": "^3.4.4"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "adm-zip": "^0.5.16",
-    "@types/adm-zip": "^0.5.5",
     "autoprefixer": "^10.4.20",
     "dotenv": "^16.4.5",
     "postcss": "^8.4.47",

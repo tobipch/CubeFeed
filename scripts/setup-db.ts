@@ -152,6 +152,39 @@ async function main() {
     )
   `;
 
+  // ── Auth tables ──────────────────────────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id            SERIAL PRIMARY KEY,
+      username      TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token      TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMP NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user
+      ON user_sessions (user_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_following (
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      wca_id   TEXT NOT NULL,
+      name     TEXT NOT NULL,
+      added_at TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (user_id, wca_id)
+    )
+  `;
+
   console.log("All tables created successfully.");
   await sql.end();
 }

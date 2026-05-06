@@ -5,10 +5,16 @@ import { useSearchParams } from "next/navigation";
 import type { PersonPRs } from "@/lib/queries";
 import PRList from "./PRList";
 import DaysSelector from "./DaysSelector";
+import LoginModal from "./LoginModal";
 
 interface FollowedPerson {
   wcaId: string;
   name: string;
+}
+
+interface AuthUser {
+  id: number;
+  username: string;
 }
 
 interface SearchResult {
@@ -33,17 +39,60 @@ export default function FollowingFeed() {
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
 
-  // Read localStorage once after mount to avoid SSR mismatch
+  // Auth state
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Check login status once on mount
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(FOLLOWING_KEY) ?? "[]");
-      if (Array.isArray(stored)) setFollowing(stored);
-    } catch {}
-    setHydrated(true);
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((data) => {
+        setUser(data ?? null);
+        setAuthChecked(true);
+      })
+      .catch(() => setAuthChecked(true));
   }, []);
 
-  // Stable key of WCA IDs — changes only when the set of followed people changes,
-  // not when their stored display names are updated after a fetch.
+  // Load following list: from DB if logged in, else from localStorage
+  useEffect(() => {
+    if (!authChecked) return;
+    if (user) {
+      fetch("/api/user/following")
+        .then((r) => r.json())
+        .then((data: FollowedPerson[]) => {
+          if (Array.isArray(data)) setFollowing(data);
+          setHydrated(true);
+        })
+        .catch(() => setHydrated(true));
+    } else {
+      try {
+        const stored = JSON.parse(localStorage.getItem(FOLLOWING_KEY) ?? "[]");
+        if (Array.isArray(stored)) setFollowing(stored);
+      } catch {}
+      setHydrated(true);
+    }
+  }, [authChecked, user]);
+
+  // Persist following list whenever it changes
+  const saveFollowing = useCallback(
+    (next: FollowedPerson[]) => {
+      if (user) {
+        fetch("/api/user/following", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(next),
+        }).catch(() => {});
+      } else {
+        try {
+          localStorage.setItem(FOLLOWING_KEY, JSON.stringify(next));
+        } catch {}
+      }
+    },
+    [user]
+  );
+
   const idsKey = useMemo(
     () =>
       following
@@ -66,17 +115,15 @@ export default function FollowingFeed() {
     setFetchError(false);
 
     const controller = new AbortController();
-    fetch(
-      `/api/feed?ids=${encodeURIComponent(idsKey)}&days=${days}`,
-      { signal: controller.signal }
-    )
+    fetch(`/api/feed?ids=${encodeURIComponent(idsKey)}&days=${days}`, {
+      signal: controller.signal,
+    })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<PersonPRs[]>;
       })
       .then((data) => {
-        // Back-fill display names from returned data so future renders show
-        // the canonical WCA name instead of whatever the user typed.
+        // Back-fill display names from the canonical WCA data
         const nameMap = new Map(data.map((p) => [p.personId, p.personName]));
         setFollowing((prev) => {
           let changed = false;
@@ -89,7 +136,7 @@ export default function FollowingFeed() {
             return f;
           });
           if (!changed) return prev;
-          try { localStorage.setItem(FOLLOWING_KEY, JSON.stringify(updated)); } catch {}
+          saveFollowing(updated);
           return updated;
         });
         setPersons(data);
@@ -105,24 +152,76 @@ export default function FollowingFeed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey, days, hydrated]);
 
-  const addPerson = useCallback((person: FollowedPerson) => {
-    setFollowing((prev) => {
-      if (prev.some((p) => p.wcaId === person.wcaId)) return prev;
-      const next = [...prev, person];
-      try { localStorage.setItem(FOLLOWING_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, []);
+  const addPerson = useCallback(
+    (person: FollowedPerson) => {
+      setFollowing((prev) => {
+        if (prev.some((p) => p.wcaId === person.wcaId)) return prev;
+        const next = [...prev, person];
+        saveFollowing(next);
+        return next;
+      });
+    },
+    [saveFollowing]
+  );
 
-  const removePerson = useCallback((wcaId: string) => {
-    setFollowing((prev) => {
-      const next = prev.filter((p) => p.wcaId !== wcaId);
-      try { localStorage.setItem(FOLLOWING_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, []);
+  const removePerson = useCallback(
+    (wcaId: string) => {
+      setFollowing((prev) => {
+        const next = prev.filter((p) => p.wcaId !== wcaId);
+        saveFollowing(next);
+        return next;
+      });
+    },
+    [saveFollowing]
+  );
 
-  // Prevent any render until localStorage has been read to avoid layout flicker
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setUser(null);
+    // Switch back to localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem(FOLLOWING_KEY) ?? "[]");
+      if (Array.isArray(stored)) setFollowing(stored);
+      else setFollowing([]);
+    } catch {
+      setFollowing([]);
+    }
+  }
+
+  function handleLoginSuccess(loggedInUser: AuthUser) {
+    setShowLoginModal(false);
+    const prevFollowing = following;
+    setUser(loggedInUser);
+    setHydrated(false);
+
+    // Merge localStorage following into DB then reload
+    fetch("/api/user/following")
+      .then((r) => r.json())
+      .then((dbFollowing: FollowedPerson[]) => {
+        if (!Array.isArray(dbFollowing)) return [];
+        // Merge: DB entries + any local entries not yet in DB
+        const merged = [...dbFollowing];
+        for (const lf of prevFollowing) {
+          if (!merged.some((d) => d.wcaId === lf.wcaId)) {
+            merged.push(lf);
+          }
+        }
+        return merged;
+      })
+      .then((merged) => {
+        setFollowing(merged);
+        if (merged.length > 0) {
+          fetch("/api/user/following", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(merged),
+          }).catch(() => {});
+        }
+        setHydrated(true);
+      })
+      .catch(() => setHydrated(true));
+  }
+
   if (!hydrated) return null;
 
   const totalPRs = persons?.reduce((s, p) => s + p.prs.length, 0) ?? 0;
@@ -131,9 +230,16 @@ export default function FollowingFeed() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <header className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <span className="text-3xl">🏆</span>
-          <h1 className="text-3xl font-bold tracking-tight">WCA PR Collector</h1>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🏆</span>
+            <h1 className="text-3xl font-bold tracking-tight">WCA PR Collector</h1>
+          </div>
+          <UserWidget
+            user={user}
+            onLoginClick={() => setShowLoginModal(true)}
+            onLogout={handleLogout}
+          />
         </div>
         <p className="text-gray-500 text-sm">
           Persönliche Rekorde deiner gefolgten Cuber aus offiziellen WCA-Competitions
@@ -169,7 +275,54 @@ export default function FollowingFeed() {
       {following.length > 0 && !loading && !fetchError && persons && persons.length > 0 && (
         <PRList persons={persons} />
       )}
+
+      {showLoginModal && (
+        <LoginModal
+          onSuccess={handleLoginSuccess}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── UserWidget ───────────────────────────────────────────────────────────────
+
+function UserWidget({
+  user,
+  onLoginClick,
+  onLogout,
+}: {
+  user: AuthUser | null;
+  onLoginClick: () => void;
+  onLogout: () => void;
+}) {
+  if (user) {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-gray-600 hidden sm:block">
+          Eingeloggt als{" "}
+          <span className="font-semibold text-gray-800">{user.username}</span>
+        </span>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
+        >
+          Abmelden
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onLoginClick}
+      className="text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-1.5 rounded-lg transition-colors"
+    >
+      Einloggen
+    </button>
   );
 }
 
@@ -192,7 +345,6 @@ function FollowingManager({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Debounced name/ID search against local DB
   useEffect(() => {
     if (query.length < 2) {
       setSuggestions([]);
@@ -221,7 +373,6 @@ function FollowingManager({
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       const target = e.target as Node;
@@ -247,7 +398,6 @@ function FollowingManager({
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       const trimmed = query.trim().toUpperCase();
-      // If it looks like a WCA ID, add directly without needing a DB match
       if (/^[0-9]{4}[A-Z]{4}[0-9]{2}$/.test(trimmed)) {
         onAdd({ wcaId: trimmed, name: trimmed });
         setQuery("");
@@ -264,7 +414,6 @@ function FollowingManager({
 
   return (
     <div>
-      {/* Chips for followed cubers */}
       {following.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {following.map((f) => (
@@ -286,7 +435,6 @@ function FollowingManager({
         </div>
       )}
 
-      {/* Search input + dropdown */}
       <div className="relative inline-block w-full sm:w-80">
         <div className="relative">
           <input
