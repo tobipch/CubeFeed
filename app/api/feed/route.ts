@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import {
   fetchPRsForPersons,
   getRanksForPersons,
-  getDbCompetitionIdsForPersons,
+  getKnownCompetitionsByPerson,
   type PersonPRs,
 } from "@/lib/queries";
 import { fetchLivePRsForPersons } from "@/lib/wca-live";
@@ -23,16 +23,16 @@ export async function GET(req: NextRequest) {
 
   const days = VALID_DAYS.includes(daysParam) ? daysParam : 7;
 
-  const [dbPersons, ranks, dbCompIds] = await Promise.all([
+  const [dbPersons, ranks, knownCompsByPerson] = await Promise.all([
     fetchPRsForPersons(ids, days).catch(() => [] as PersonPRs[]),
     getRanksForPersons(ids).catch(() => ({
       single: new Map<string, number>(),
       average: new Map<string, number>(),
     })),
-    getDbCompetitionIdsForPersons(ids).catch(() => new Set<string>()),
+    getKnownCompetitionsByPerson(ids).catch(() => new Map<string, Set<string>>()),
   ]);
 
-  const livePRs = await fetchLivePRsForPersons(ids, days, dbCompIds, ranks).catch(
+  const livePRs = await fetchLivePRsForPersons(ids, days, knownCompsByPerson, ranks).catch(
     () => [] as PersonPRs[]
   );
 

@@ -267,7 +267,7 @@ export async function fetchLivePRs(
 export async function fetchLivePRsForPersons(
   personIds: string[],
   days: number,
-  knownCompetitionIds: Set<string>,
+  knownCompsByPerson: Map<string, Set<string>>,
   ranks: RankMap
 ): Promise<PersonPRs[]> {
   if (personIds.length === 0) return [];
@@ -285,8 +285,12 @@ export async function fetchLivePRsForPersons(
     return [];
   }
 
+  // Include a competition if it has no wca_id (never in DB) OR if at least one
+  // followed person doesn't yet have DB results for it.
   const liveComps = competitions.filter(
-    (c) => !c.wca_id || !knownCompetitionIds.has(c.wca_id)
+    (c) =>
+      !c.wca_id ||
+      personIds.some((id) => !knownCompsByPerson.get(id)?.has(c.wca_id!))
   );
   if (liveComps.length === 0) return [];
 
@@ -294,7 +298,7 @@ export async function fetchLivePRsForPersons(
 
   await Promise.all(
     liveComps.map((comp) =>
-      processCompetitionForPersons(comp, followedIds, ranks, personMap)
+      processCompetitionForPersons(comp, followedIds, knownCompsByPerson, ranks, personMap)
     )
   );
 
@@ -313,6 +317,7 @@ export async function fetchLivePRsForPersons(
 async function processCompetitionForPersons(
   comp: GqlCompetition,
   followedIds: Set<string>,
+  knownCompsByPerson: Map<string, Set<string>>,
   ranks: RankMap,
   personMap: Map<string, PersonPRs>
 ): Promise<void> {
@@ -328,12 +333,17 @@ async function processCompetitionForPersons(
   }
   if (!detail) return;
 
+  const wcaCompId = detail.wca_id ?? `live-${comp.id}`;
+
+  // Only fetch persons who are followed AND don't already have DB results for this competition.
   const followedCompetitors = detail.competitors.filter(
-    (c) => c.wca_id && followedIds.has(c.wca_id)
+    (c) =>
+      c.wca_id &&
+      followedIds.has(c.wca_id) &&
+      !knownCompsByPerson.get(c.wca_id)?.has(wcaCompId)
   );
   if (followedCompetitors.length === 0) return;
 
-  const wcaCompId = detail.wca_id ?? `live-${comp.id}`;
   const endDate = detail.end_date ?? detail.start_date;
   const compName = detail.name;
 
