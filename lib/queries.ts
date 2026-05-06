@@ -375,56 +375,48 @@ export async function getPersonCountries(personIds: string[]): Promise<Map<strin
  * rank: 1 + count of persons from the same country with a strictly better time
  * in ranks_single / ranks_average.
  * Key format: "eventId:type:time:countryId"
+ * Requires indexes on ranks_single(event_id, best) and ranks_average(event_id, best).
  */
 export async function getVirtualNRs(
   prs: Array<{ eventId: string; type: "single" | "average"; time: number; countryId: string }>
 ): Promise<Map<string, number>> {
   if (prs.length === 0) return new Map();
 
-  const result = new Map<string, number>();
-
-  const runQuery = async (
-    entries: typeof prs,
-    rankTable: "ranks_single" | "ranks_average"
-  ) => {
-    if (entries.length === 0) return;
-    const eventIds   = entries.map((e) => e.eventId);
-    const times      = entries.map((e) => e.time);
-    const countryIds = entries.map((e) => e.countryId);
-    const type       = rankTable === "ranks_single" ? "single" : "average";
-
-    const rows = await sql<{ event_id: string; time: number; country_id: string; nr: number }[]>`
-      SELECT v.event_id, v.time::int, v.country_id,
-        COUNT(match.person_id)::int + 1 AS nr
-      FROM unnest(
-        ${sql.array(eventIds)}::text[],
-        ${sql.array(times)}::int[],
-        ${sql.array(countryIds)}::text[]
-      ) AS v(event_id, time, country_id)
-      LEFT JOIN (
-        SELECT r.event_id, r.person_id, r.best, p.country_id
-        FROM ${sql(rankTable)} r
-        INNER JOIN persons p ON p.id = r.person_id
-        WHERE r.best > 0
-      ) match ON match.event_id   = v.event_id
-             AND match.best       < v.time
-             AND match.country_id = v.country_id
-      GROUP BY v.event_id, v.time, v.country_id
-    `;
-
-    for (const row of rows) {
-      result.set(`${row.event_id}:${type}:${row.time}:${row.country_id}`, row.nr);
-    }
-  };
+  const eventIds   = prs.map((p) => p.eventId);
+  const types      = prs.map((p) => p.type);
+  const times      = prs.map((p) => p.time);
+  const countryIds = prs.map((p) => p.countryId);
 
   try {
-    await Promise.all([
-      runQuery(prs.filter((p) => p.type === "single"),  "ranks_single"),
-      runQuery(prs.filter((p) => p.type === "average"), "ranks_average"),
-    ]);
-  } catch {
-    // silently degrade
-  }
+    const rows = await sql<{ event_id: string; type: string; time: number; country_id: string; nr: number }[]>`
+      SELECT v.event_id, v.type, v.time::int, v.country_id,
+        CASE WHEN v.type = 'single' THEN (
+          SELECT COUNT(*)::int + 1
+          FROM ranks_single rs
+          JOIN persons p ON p.wca_id = rs.person_id
+          WHERE rs.event_id = v.event_id
+            AND p.country_id = v.country_id
+            AND rs.best > 0 AND rs.best < v.time
+        ) ELSE (
+          SELECT COUNT(*)::int + 1
+          FROM ranks_average ra
+          JOIN persons p ON p.wca_id = ra.person_id
+          WHERE ra.event_id = v.event_id
+            AND p.country_id = v.country_id
+            AND ra.best > 0 AND ra.best < v.time
+        ) END AS nr
+      FROM unnest(
+        ${sql.array(eventIds)}::text[],
+        ${sql.array(types)}::text[],
+        ${sql.array(times)}::int[],
+        ${sql.array(countryIds)}::text[]
+      ) AS v(event_id, type, time, country_id)
+    `;
 
-  return result;
+    return new Map(
+      rows.map((r) => [`${r.event_id}:${r.type}:${r.time}:${r.country_id}`, r.nr])
+    );
+  } catch {
+    return new Map();
+  }
 }

@@ -126,6 +126,22 @@ async function main() {
       ON competitions (end_date)
   `;
 
+  // Indexes needed for virtual NR computation (count persons with better time per event)
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_single_event_best
+      ON ranks_single (event_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_average_event_best
+      ON ranks_average (event_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_persons_wca_id
+      ON persons (wca_id)
+  `;
+
   // Migration: drop old single-column bravos table (person_id only) if it exists
   await sql`
     DO $$

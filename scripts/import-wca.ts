@@ -264,9 +264,10 @@ async function importRanks(
   console.log(`  Imported ${deduped.length} ${table} entries`);
 }
 
-// Only import the top N global results per event for the rank_brackets table.
-// This covers any realistic NR/CR/WR range for Swiss competitors.
-const RANK_BRACKETS_LIMIT = 10_000;
+// Import all global results into the rank_brackets table (no artificial cutoff).
+// The table stores one row per unique (event_id, type, best_time) which compresses
+// well — even with millions of competitors, unique times per event are far fewer.
+const RANK_BRACKETS_LIMIT = Infinity;
 
 async function buildPersonContinentMap(
   personsFile: string,
