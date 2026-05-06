@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, eventIconUrl, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
@@ -24,6 +25,18 @@ export default function PersonCard({
   liked,
   onBravo,
 }: Props) {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`https://www.worldcubeassociation.org/api/v0/persons/${person.personId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const thumb = data?.person?.avatar?.thumb_url;
+        if (thumb) setAvatarUrl(thumb);
+      })
+      .catch(() => {});
+  }, [person.personId]);
+
   // Deduplicate: for each (eventId, type) keep the most recent PR; if same
   // date, keep the better (lower) time. The displaced entry becomes prevTime.
   const byEventType = new Map<string, PR[]>();
@@ -84,6 +97,18 @@ export default function PersonCard({
         <span className="text-xs text-gray-400 font-mono shrink-0">
           {person.personId}
         </span>
+        <div className="ml-auto shrink-0">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt={person.personName}
+              className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gray-100 animate-pulse" />
+          )}
+        </div>
       </div>
 
       {/* Badge list */}
@@ -247,7 +272,10 @@ function PRBadge({
         {/* Row 2: PR time + prev (left) | NR CR WR (right) */}
         <div className="flex items-baseline justify-between gap-2 mt-1">
           <div className="flex items-baseline gap-1.5 min-w-0">
-            <span className="text-sm font-bold font-mono text-gray-900 tabular-nums shrink-0">
+            <span
+              className="text-base font-bold text-gray-900 tabular-nums shrink-0"
+              style={{ fontFamily: "var(--font-dm-mono)" }}
+            >
               {formatTime(pr.time, pr.eventId, pr.type)}
             </span>
             <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
@@ -264,23 +292,21 @@ function PRBadge({
         </div>
       </a>
 
-      {/* Divider + heart button */}
-      <div className={`flex items-center border-l ${dividerColor} px-2.5 shrink-0`}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onBravo?.();
-          }}
-          className={`flex flex-col items-center gap-0.5 transition-colors ${heartColor}`}
-          aria-label={isLiked ? "Bravo entfernen" : "Bravo geben"}
-        >
-          <HeartIcon filled={isLiked} />
-          {bravoCount > 0 && (
-            <span className="text-xs leading-none">{bravoCount}</span>
-          )}
-        </button>
-      </div>
+      {/* Divider + heart — entire area is clickable */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onBravo?.();
+        }}
+        className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
+        aria-label={isLiked ? "Bravo entfernen" : "Bravo geben"}
+      >
+        <HeartIcon filled={isLiked} />
+        {bravoCount > 0 && (
+          <span className="text-xs leading-none">{bravoCount}</span>
+        )}
+      </button>
     </div>
   );
 }
