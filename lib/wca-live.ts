@@ -12,7 +12,7 @@
  * gracefully when WCA Live is unavailable.
  */
 
-import { getVirtualRankings } from "./queries";
+import { getVirtualRankings, getVirtualNRs, getPersonCountries } from "./queries";
 import type { PersonPRs, PR, RankMap } from "./queries";
 
 const WCA_LIVE_API = "https://live.worldcubeassociation.org/api";
@@ -302,13 +302,32 @@ export async function fetchLivePRsForPersons(
     )
   );
 
+  const personCountries = await getPersonCountries(personIds).catch(() => new Map<string, string>());
+
   const allPRs = Array.from(personMap.values()).flatMap((p) => p.prs);
-  const rankings = await getVirtualRankings(
-    allPRs.map((pr) => ({ eventId: pr.eventId, type: pr.type, time: pr.time }))
-  );
-  for (const pr of allPRs) {
-    const r = rankings.get(`${pr.eventId}:${pr.type}:${pr.time}`);
-    if (r) { pr.wr = r.wr; pr.cr = r.cr; }
+  const [rankings, nrs] = await Promise.all([
+    getVirtualRankings(
+      allPRs.map((pr) => ({ eventId: pr.eventId, type: pr.type, time: pr.time }))
+    ),
+    getVirtualNRs(
+      Array.from(personMap.entries()).flatMap(([wcaId, p]) => {
+        const countryId = personCountries.get(wcaId);
+        if (!countryId) return [];
+        return p.prs.map((pr) => ({ eventId: pr.eventId, type: pr.type, time: pr.time, countryId }));
+      })
+    ),
+  ]);
+
+  for (const [wcaId, p] of personMap.entries()) {
+    const countryId = personCountries.get(wcaId);
+    for (const pr of p.prs) {
+      const r = rankings.get(`${pr.eventId}:${pr.type}:${pr.time}`);
+      if (r) { pr.wr = r.wr; pr.cr = r.cr; }
+      if (countryId) {
+        const nr = nrs.get(`${pr.eventId}:${pr.type}:${pr.time}:${countryId}`);
+        if (nr != null) pr.nr = nr;
+      }
+    }
   }
 
   return Array.from(personMap.values()).filter((p) => p.prs.length > 0);

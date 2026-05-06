@@ -360,3 +360,71 @@ export async function getVirtualRankings(
     return new Map();
   }
 }
+
+export async function getPersonCountries(personIds: string[]): Promise<Map<string, string>> {
+  if (personIds.length === 0) return new Map();
+  const rows = await sql<{ id: string; country_id: string }[]>`
+    SELECT id, country_id FROM persons
+    WHERE id = ANY(${sql.array(personIds)}::text[]) AND country_id IS NOT NULL
+  `;
+  return new Map(rows.map((r) => [r.id, r.country_id]));
+}
+
+/**
+ * For each (eventId, type, time, countryId) entry, returns the virtual national
+ * rank: 1 + count of persons from the same country with a strictly better time
+ * in ranks_single / ranks_average.
+ * Key format: "eventId:type:time:countryId"
+ */
+export async function getVirtualNRs(
+  prs: Array<{ eventId: string; type: "single" | "average"; time: number; countryId: string }>
+): Promise<Map<string, number>> {
+  if (prs.length === 0) return new Map();
+
+  const result = new Map<string, number>();
+
+  const runQuery = async (
+    entries: typeof prs,
+    rankTable: "ranks_single" | "ranks_average"
+  ) => {
+    if (entries.length === 0) return;
+    const eventIds   = entries.map((e) => e.eventId);
+    const times      = entries.map((e) => e.time);
+    const countryIds = entries.map((e) => e.countryId);
+    const type       = rankTable === "ranks_single" ? "single" : "average";
+
+    const rows = await sql<{ event_id: string; time: number; country_id: string; nr: number }[]>`
+      SELECT v.event_id, v.time::int, v.country_id,
+        COUNT(match.person_id)::int + 1 AS nr
+      FROM unnest(
+        ${sql.array(eventIds)}::text[],
+        ${sql.array(times)}::int[],
+        ${sql.array(countryIds)}::text[]
+      ) AS v(event_id, time, country_id)
+      LEFT JOIN (
+        SELECT r.event_id, r.person_id, r.best, p.country_id
+        FROM ${sql(rankTable)} r
+        INNER JOIN persons p ON p.id = r.person_id
+        WHERE r.best > 0
+      ) match ON match.event_id   = v.event_id
+             AND match.best       < v.time
+             AND match.country_id = v.country_id
+      GROUP BY v.event_id, v.time, v.country_id
+    `;
+
+    for (const row of rows) {
+      result.set(`${row.event_id}:${type}:${row.time}:${row.country_id}`, row.nr);
+    }
+  };
+
+  try {
+    await Promise.all([
+      runQuery(prs.filter((p) => p.type === "single"),  "ranks_single"),
+      runQuery(prs.filter((p) => p.type === "average"), "ranks_average"),
+    ]);
+  } catch {
+    // silently degrade
+  }
+
+  return result;
+}
