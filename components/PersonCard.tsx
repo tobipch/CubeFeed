@@ -191,9 +191,12 @@ function PRBadge({
   const level = bravoLevel(bravoCount);
   const record = pr.regionalRecord && pr.regionalRecord !== "PR" ? pr.regionalRecord : null;
 
-  const typeColors = ["text-blue-500","text-blue-500","text-blue-600","text-blue-700"];
-  const typeColorOrange = ["text-orange-500","text-orange-500","text-orange-600","text-orange-700"];
-  const typeColor = isSingle ? typeColors[level] : typeColorOrange[level];
+  const typeColors = isSingle
+    ? (["text-blue-500","text-blue-500","text-blue-600","text-blue-700"] as const)
+    : (["text-orange-500","text-orange-500","text-orange-600","text-orange-700"] as const);
+  const typeColor = typeColors[level];
+
+  const dividerColor = isSingle ? "border-blue-200" : "border-orange-200";
 
   const heartColor = isLiked
     ? "text-red-500"
@@ -203,7 +206,7 @@ function PRBadge({
 
   return (
     <div
-      className={`group flex items-center rounded-lg w-full transition-colors overflow-hidden ${record ? "relative z-10" : ""} ${badgeColorClasses(isSingle, level)}`}
+      className={`group flex items-stretch rounded-lg w-full transition-colors overflow-hidden ${record ? "relative z-10" : ""} ${badgeColorClasses(isSingle, level)}`}
       style={badgeInlineStyle(isSingle, level)}
     >
       {/* Left record stripe */}
@@ -211,68 +214,73 @@ function PRBadge({
         <div className="w-[4px] self-stretch shrink-0" style={{ background: recordStripe(record) }} />
       )}
 
-      {/* Main link */}
+      {/* Main link — two-row layout */}
       <a
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        title={pr.competitionName}
-        className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0"
+        className="flex-1 px-3 py-2 min-w-0"
       >
-        {/* Event identity */}
-        <div className="flex items-center gap-1 w-36 shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={eventIconUrl(pr.eventId)}
-            alt={eventName(pr.eventId)}
-            width={14}
-            height={14}
-            className="opacity-60 shrink-0"
-          />
-          <span className="text-xs font-medium text-gray-500 truncate">
-            {eventName(pr.eventId)}
-          </span>
-          <span className={`text-xs font-medium shrink-0 ${typeColor}`}>
-            {typeLabel(pr.eventId, pr.type)}
+        {/* Row 1: icon + event name + type (left) | competition name (right) */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={eventIconUrl(pr.eventId)}
+              alt={eventName(pr.eventId)}
+              width={13}
+              height={13}
+              className="opacity-60 shrink-0"
+            />
+            <span className="text-xs font-medium text-gray-500">
+              {eventName(pr.eventId)}
+            </span>
+            <span className={`text-xs font-medium ${typeColor}`}>
+              {typeLabel(pr.eventId, pr.type)}
+            </span>
+          </div>
+          <span className="text-xs text-gray-400 truncate text-right ml-2 min-w-0">
+            {pr.competitionName}
           </span>
         </div>
 
-        {/* Time */}
-        <span className="text-sm font-bold font-mono text-gray-900 w-20 shrink-0 tabular-nums">
-          {formatTime(pr.time, pr.eventId, pr.type)}
-        </span>
-
-        {/* Previous time + rankings */}
-        <div className="flex items-center gap-2 ml-auto shrink-0">
-          {prevTime !== undefined && (
-            <span className="text-xs text-gray-400 font-mono hidden sm:inline tabular-nums">
-              {formatTime(prevTime, pr.eventId, pr.type)}
+        {/* Row 2: PR time + prev (left) | NR CR WR (right) */}
+        <div className="flex items-baseline justify-between gap-2 mt-1">
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <span className="text-sm font-bold font-mono text-gray-900 tabular-nums shrink-0">
+              {formatTime(pr.time, pr.eventId, pr.type)}
             </span>
-          )}
-          <div className="flex items-center gap-1">
-            {pr.regionalRecord && pr.regionalRecord !== "PR" && (
-              <RecordHighlight record={pr.regionalRecord} />
-            )}
-            {pr.wr && <RankBadge label="WR" value={pr.wr} />}
-            {pr.cr && <RankBadge label="CR" value={pr.cr} />}
+            <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
+              ({prevTime !== undefined
+                ? formatTime(prevTime, pr.eventId, pr.type)
+                : "vorher kein Resultat"})
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
             {pr.nr && <RankBadge label="NR" value={pr.nr} />}
+            {pr.cr && <RankBadge label="CR" value={pr.cr} />}
+            {pr.wr && <RankBadge label="WR" value={pr.wr} />}
           </div>
         </div>
       </a>
 
-      {/* Bravo button */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onBravo?.();
-        }}
-        className={`flex items-center gap-0.5 text-xs px-2 py-2 transition-colors shrink-0 ${heartColor}`}
-        aria-label={isLiked ? "Bravo entfernen" : "Bravo geben"}
-      >
-        <HeartIcon filled={isLiked} />
-        {bravoCount > 0 && <span>{bravoCount}</span>}
-      </button>
+      {/* Divider + heart button */}
+      <div className={`flex items-center border-l ${dividerColor} px-2.5 shrink-0`}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onBravo?.();
+          }}
+          className={`flex flex-col items-center gap-0.5 transition-colors ${heartColor}`}
+          aria-label={isLiked ? "Bravo entfernen" : "Bravo geben"}
+        >
+          <HeartIcon filled={isLiked} />
+          {bravoCount > 0 && (
+            <span className="text-xs leading-none">{bravoCount}</span>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
