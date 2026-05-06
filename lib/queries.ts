@@ -231,6 +231,19 @@ export async function getDbCompetitionIds(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.competition_id));
 }
 
+// Person-aware variant: only returns competition IDs where one of the given
+// persons actually has results in the DB. Used by the feed so that non-Swiss
+// cubers (whose results are not imported) are always looked up on WCA Live,
+// even for competitions that contain Swiss results.
+export async function getDbCompetitionIdsForPersons(personIds: string[]): Promise<Set<string>> {
+  if (personIds.length === 0) return new Set();
+  const rows = await sql<{ competition_id: string }[]>`
+    SELECT DISTINCT competition_id FROM results
+    WHERE person_id = ANY(${sql.array(personIds)}::text[])
+  `;
+  return new Set(rows.map((r) => r.competition_id));
+}
+
 function nullStr(val: string | null): string | null {
   if (!val || val === "NULL") return null;
   return val;

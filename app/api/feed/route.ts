@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import {
   fetchPRsForPersons,
   getRanksForPersons,
-  getDbCompetitionIds,
+  getDbCompetitionIdsForPersons,
   type PersonPRs,
 } from "@/lib/queries";
 import { fetchLivePRsForPersons } from "@/lib/wca-live";
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       single: new Map<string, number>(),
       average: new Map<string, number>(),
     })),
-    getDbCompetitionIds().catch(() => new Set<string>()),
+    getDbCompetitionIdsForPersons(ids).catch(() => new Set<string>()),
   ]);
 
   const livePRs = await fetchLivePRsForPersons(ids, days, dbCompIds, ranks).catch(
