@@ -85,7 +85,7 @@ export default function PersonCard({
       className="bg-white rounded-xl border border-gray-200 scroll-mt-4 overflow-hidden"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
         <a
           href={`https://www.worldcubeassociation.org/persons/${person.personId}`}
           target="_blank"
@@ -103,16 +103,16 @@ export default function PersonCard({
             <img
               src={avatarUrl}
               alt={person.personName}
-              className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200"
+              className="w-10 h-10 rounded-full object-cover ring-1 ring-gray-200"
             />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-gray-100 animate-pulse" />
+            <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse" />
           )}
         </div>
       </div>
 
       {/* Badge list */}
-      <div className="px-4 py-3 flex flex-col gap-1.5">
+      <div className="px-3 py-2 flex flex-col gap-1.5">
         {eventGroups.map(([eventId, items]) => {
           const dimmed = highlightEvent != null && eventId !== highlightEvent;
           return (
@@ -315,7 +315,7 @@ function HeartIcon({ filled }: { filled: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="w-3 h-3 shrink-0"
+      className="w-5 h-5 shrink-0"
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth={2}
