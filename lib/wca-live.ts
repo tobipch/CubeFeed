@@ -45,8 +45,8 @@ async function graphql<T>(
 // ─── GraphQL types ─────────────────────────────────────────────────────────
 
 interface GqlCompetition {
-  id: string;      // WCA Live internal numeric ID — used for API queries
-  wca_id: string;  // WCA string ID (e.g. "GhemAmmoVoiaDaCubaa2026") — used for DB deduplication
+  id: string;           // WCA Live internal numeric ID — used for API queries
+  wca_id: string | null; // WCA string ID — null if not yet officially registered
   name: string;
   start_date: string;
   end_date: string | null;
@@ -234,10 +234,11 @@ export async function fetchLivePRs(
     return [];
   }
 
-  // Use wca_id (string ID like "GhemAmmoVoiaDaCubaa2026") to match against our DB,
-  // since WCA Live's internal id is a numeric key that differs from the WCA string ID.
+  // Skip competitions already fully imported into our DB (matched by wca_id).
+  // Competitions without a wca_id are not yet officially registered and can
+  // never be in the DB, so they are always included.
   const liveComps = competitions.filter(
-    (c) => c.wca_id && !knownCompetitionIds.has(c.wca_id)
+    (c) => !c.wca_id || !knownCompetitionIds.has(c.wca_id)
   );
 
   if (liveComps.length === 0) return [];
@@ -285,7 +286,7 @@ export async function fetchLivePRsForPersons(
   }
 
   const liveComps = competitions.filter(
-    (c) => c.wca_id && !knownCompetitionIds.has(c.wca_id)
+    (c) => !c.wca_id || !knownCompetitionIds.has(c.wca_id)
   );
   if (liveComps.length === 0) return [];
 
@@ -332,7 +333,7 @@ async function processCompetitionForPersons(
   );
   if (followedCompetitors.length === 0) return;
 
-  const wcaCompId = detail.wca_id;
+  const wcaCompId = detail.wca_id ?? `live-${comp.id}`;
   const endDate = detail.end_date ?? detail.start_date;
   const compName = detail.name;
 
@@ -431,7 +432,7 @@ async function processCompetition(
   );
   if (swissCompetitors.length === 0) return;
 
-  const wcaCompId = detail.wca_id;
+  const wcaCompId = detail.wca_id ?? `live-${comp.id}`;
   const endDate = detail.end_date ?? detail.start_date;
   const compName = detail.name;
 
