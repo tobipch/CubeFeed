@@ -73,6 +73,7 @@ async function main() {
       world_rank     INTEGER,
       continent_rank INTEGER,
       country_rank   INTEGER,
+      country_id     TEXT,
       PRIMARY KEY (person_id, event_id)
     )
   `;
@@ -85,6 +86,7 @@ async function main() {
       world_rank     INTEGER,
       continent_rank INTEGER,
       country_rank   INTEGER,
+      country_id     TEXT,
       PRIMARY KEY (person_id, event_id)
     )
   `;
@@ -126,15 +128,19 @@ async function main() {
       ON competitions (end_date)
   `;
 
-  // Indexes needed for virtual NR computation (count persons with better time per event)
+  // Migrate: add country_id column to existing ranks tables if not present
+  await sql`ALTER TABLE ranks_single  ADD COLUMN IF NOT EXISTS country_id TEXT`;
+  await sql`ALTER TABLE ranks_average ADD COLUMN IF NOT EXISTS country_id TEXT`;
+
+  // Indexes for virtual NR bracket lookup (event_id, country_id, best)
   await sql`
-    CREATE INDEX IF NOT EXISTS idx_ranks_single_event_best
-      ON ranks_single (event_id, best)
+    CREATE INDEX IF NOT EXISTS idx_ranks_single_event_country_best
+      ON ranks_single (event_id, country_id, best)
   `;
 
   await sql`
-    CREATE INDEX IF NOT EXISTS idx_ranks_average_event_best
-      ON ranks_average (event_id, best)
+    CREATE INDEX IF NOT EXISTS idx_ranks_average_event_country_best
+      ON ranks_average (event_id, country_id, best)
   `;
 
   await sql`

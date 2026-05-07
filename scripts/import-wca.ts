@@ -152,11 +152,14 @@ async function importCompetitions(filePath: string): Promise<void> {
   console.log(`  Imported ${rows.length} competitions`);
 }
 
-async function importPersons(filePath: string): Promise<Set<string>> {
+async function importPersons(
+  filePath: string
+): Promise<{ swissIds: Set<string>; personCountryMap: Map<string, string> }> {
   console.log("Importing all persons (worldwide)...");
   await sql`TRUNCATE persons`;
 
   const swissIds = new Set<string>();
+  const personCountryMap = new Map<string, string>(); // wca_id → country_id (latest sub_id wins)
   const rows: { wca_id: string; sub_id: number; name: string; country_id: string }[] = [];
 
   for await (const row of readTSV(filePath)) {
@@ -164,6 +167,7 @@ async function importPersons(filePath: string): Promise<Set<string>> {
     const id = row["id"] ?? row["wca_id"] ?? "";
     if (!id) continue;
     if (countryId === COUNTRY) swissIds.add(id);
+    if (countryId) personCountryMap.set(id, countryId);
     rows.push({
       wca_id: id,
       sub_id: Number(row["subid"]) || 0,
@@ -183,7 +187,7 @@ async function importPersons(filePath: string): Promise<Set<string>> {
   });
 
   console.log(`  Imported ${deduped.length} persons (${swissIds.size} Swiss)`);
-  return swissIds;
+  return { swissIds, personCountryMap };
 }
 
 async function importResults(filePath: string): Promise<void> {
@@ -226,7 +230,8 @@ async function importResults(filePath: string): Promise<void> {
 
 async function importRanks(
   filePath: string,
-  table: "ranks_single" | "ranks_average"
+  table: "ranks_single" | "ranks_average",
+  personCountryMap: Map<string, string>
 ): Promise<void> {
   console.log(`Importing ${table} (worldwide)...`);
   await sql`TRUNCATE ${sql(table)}`;
@@ -234,6 +239,7 @@ async function importRanks(
   const rows: {
     person_id: string; event_id: string; best: number;
     world_rank: number; continent_rank: number; country_rank: number;
+    country_id: string | null;
   }[] = [];
 
   for await (const row of readTSV(filePath)) {
@@ -246,6 +252,7 @@ async function importRanks(
       world_rank:     Number(col(row, "world_rank",     "worldRank"))     || 0,
       continent_rank: Number(col(row, "continent_rank", "continentRank")) || 0,
       country_rank:   Number(col(row, "country_rank",   "countryRank"))   || 0,
+      country_id:     personCountryMap.get(personId) ?? null,
     });
   }
 
@@ -257,7 +264,8 @@ async function importRanks(
         best           = EXCLUDED.best,
         world_rank     = EXCLUDED.world_rank,
         continent_rank = EXCLUDED.continent_rank,
-        country_rank   = EXCLUDED.country_rank
+        country_rank   = EXCLUDED.country_rank,
+        country_id     = EXCLUDED.country_id
     `;
   });
 
@@ -450,11 +458,11 @@ async function main() {
     }
 
     const personsFile = findTsv("Persons");
-    const swissIds = await importPersons(personsFile);
+    const { swissIds, personCountryMap } = await importPersons(personsFile);
     await importCompetitions(findTsv("Competitions"));
     await importResults(findTsv("Results"));
-    await importRanks(findTsv("ranks_single"), "ranks_single");
-    await importRanks(findTsv("ranks_average"), "ranks_average");
+    await importRanks(findTsv("ranks_single"), "ranks_single", personCountryMap);
+    await importRanks(findTsv("ranks_average"), "ranks_average", personCountryMap);
 
     try {
       const personContinentMap = await buildPersonContinentMap(
