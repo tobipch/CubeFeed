@@ -336,8 +336,20 @@ export async function getVirtualRankings(
       { event_id: string; type: string; time: number; virtual_wr: number | null; virtual_cr: number | null }[]
     >`
       SELECT v.event_id, v.type, v.time::int,
-        MIN(rb.world_rank)  AS virtual_wr,
-        MIN(rb.europe_rank) AS virtual_cr
+        MIN(rb.world_rank) AS virtual_wr,
+        (1 + CASE WHEN v.type = 'single' THEN (
+          SELECT COUNT(*) FROM ranks_single rs
+          WHERE rs.event_id    = v.event_id
+            AND rs.continent_id = '_Europe'
+            AND rs.best         < v.time
+            AND rs.best         > 0
+        ) ELSE (
+          SELECT COUNT(*) FROM ranks_average ra
+          WHERE ra.event_id    = v.event_id
+            AND ra.continent_id = '_Europe'
+            AND ra.best         < v.time
+            AND ra.best         > 0
+        ) END)::int AS virtual_cr
       FROM unnest(
         ${sql.array(eventIds)}::text[],
         ${sql.array(types)}::text[],

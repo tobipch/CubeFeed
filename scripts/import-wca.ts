@@ -231,7 +231,8 @@ async function importResults(filePath: string): Promise<void> {
 async function importRanks(
   filePath: string,
   table: "ranks_single" | "ranks_average",
-  personCountryMap: Map<string, string>
+  personCountryMap: Map<string, string>,
+  personContinentMap: Map<string, string>
 ): Promise<void> {
   console.log(`Importing ${table} (worldwide)...`);
   await sql`TRUNCATE ${sql(table)}`;
@@ -239,7 +240,7 @@ async function importRanks(
   const rows: {
     person_id: string; event_id: string; best: number;
     world_rank: number; continent_rank: number; country_rank: number;
-    country_id: string | null;
+    country_id: string | null; continent_id: string | null;
   }[] = [];
 
   for await (const row of readTSV(filePath)) {
@@ -253,6 +254,7 @@ async function importRanks(
       continent_rank: Number(col(row, "continent_rank", "continentRank")) || 0,
       country_rank:   Number(col(row, "country_rank",   "countryRank"))   || 0,
       country_id:     personCountryMap.get(personId) ?? null,
+      continent_id:   personContinentMap.get(personId) || null,
     });
   }
 
@@ -265,7 +267,8 @@ async function importRanks(
         world_rank     = EXCLUDED.world_rank,
         continent_rank = EXCLUDED.continent_rank,
         country_rank   = EXCLUDED.country_rank,
-        country_id     = EXCLUDED.country_id
+        country_id     = EXCLUDED.country_id,
+        continent_id   = EXCLUDED.continent_id
     `;
   });
 
@@ -432,14 +435,18 @@ async function main() {
     const { swissIds, personCountryMap } = await importPersons(personsFile);
     await importCompetitions(findTsv("Competitions"));
     await importResults(findTsv("Results"));
-    await importRanks(findTsv("ranks_single"), "ranks_single", personCountryMap);
-    await importRanks(findTsv("ranks_average"), "ranks_average", personCountryMap);
+
+    let personContinentMap = new Map<string, string>();
+    try {
+      personContinentMap = await buildPersonContinentMap(personsFile, findTsv("Countries"));
+    } catch (e) {
+      console.warn("Could not build personContinentMap:", e);
+    }
+
+    await importRanks(findTsv("ranks_single"),  "ranks_single",  personCountryMap, personContinentMap);
+    await importRanks(findTsv("ranks_average"), "ranks_average", personCountryMap, personContinentMap);
 
     try {
-      const personContinentMap = await buildPersonContinentMap(
-        personsFile,
-        findTsv("Countries")
-      );
       await importRankBrackets(
         findTsv("ranks_single"),
         findTsv("ranks_average"),

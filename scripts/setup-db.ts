@@ -128,11 +128,13 @@ async function main() {
       ON competitions (end_date)
   `;
 
-  // Migrate: add country_id column to existing ranks tables if not present
+  // Migrate: add country_id and continent_id columns to existing ranks tables if not present
   await sql`ALTER TABLE ranks_single  ADD COLUMN IF NOT EXISTS country_id TEXT`;
   await sql`ALTER TABLE ranks_average ADD COLUMN IF NOT EXISTS country_id TEXT`;
+  await sql`ALTER TABLE ranks_single  ADD COLUMN IF NOT EXISTS continent_id TEXT`;
+  await sql`ALTER TABLE ranks_average ADD COLUMN IF NOT EXISTS continent_id TEXT`;
 
-  // Indexes for virtual NR bracket lookup (event_id, country_id, best)
+  // Indexes for virtual NR/CR lookup (event_id, country_id/continent_id, best)
   await sql`
     CREATE INDEX IF NOT EXISTS idx_ranks_single_event_country_best
       ON ranks_single (event_id, country_id, best)
@@ -141,6 +143,16 @@ async function main() {
   await sql`
     CREATE INDEX IF NOT EXISTS idx_ranks_average_event_country_best
       ON ranks_average (event_id, country_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_single_event_continent_best
+      ON ranks_single (event_id, continent_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_average_event_continent_best
+      ON ranks_average (event_id, continent_id, best)
   `;
 
   await sql`
