@@ -233,7 +233,7 @@ export default function FollowingFeed() {
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
             <span className="text-3xl">🏆</span>
-            <h1 className="text-3xl font-bold tracking-tight">WCA PR Collector</h1>
+            <h1 className="text-3xl font-bold tracking-tight">CuberFeed</h1>
           </div>
           <UserWidget
             user={user}
@@ -242,7 +242,7 @@ export default function FollowingFeed() {
           />
         </div>
         <p className="text-gray-500 text-sm">
-          Persönliche Rekorde deiner gefolgten Cuber aus offiziellen WCA-Competitions
+          Never miss a great moment from your favorite cubers.
         </p>
       </header>
 

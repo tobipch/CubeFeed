@@ -10,8 +10,8 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Swiss WCA PR Collector",
-  description: "Personal records of Swiss speedcubers from recent WCA competitions",
+  title: "CuberFeed",
+  description: "Never miss a great moment from your favorite cubers.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
