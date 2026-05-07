@@ -31,7 +31,7 @@ export default function JumpNav({ persons }: Props) {
             onClick={() => setExpanded((v) => !v)}
             className="px-2.5 py-1 rounded-full text-xs bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors"
           >
-            {expanded ? "Weniger ▲" : `+${persons.length - INITIAL_VISIBLE} mehr ▼`}
+            {expanded ? "Less ▲" : `+${persons.length - INITIAL_VISIBLE} more ▼`}
           </button>
         )}
       </div>

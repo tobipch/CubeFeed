@@ -281,7 +281,7 @@ function PRBadge({
             <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
               ({prevTime !== undefined
                 ? formatTime(prevTime, pr.eventId, pr.type)
-                : "vorher kein Resultat"})
+                : "no previous result"})
             </span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -300,7 +300,7 @@ function PRBadge({
           onBravo?.();
         }}
         className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
-        aria-label={isLiked ? "Bravo entfernen" : "Bravo geben"}
+        aria-label={isLiked ? "Remove bravo" : "Give bravo"}
       >
         <HeartIcon filled={isLiked} />
         {bravoCount > 0 && (

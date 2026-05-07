@@ -233,7 +233,7 @@ export default function FollowingFeed() {
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
             <span className="text-3xl">🏆</span>
-            <h1 className="text-3xl font-bold tracking-tight">CuberFeed</h1>
+            <h1 className="text-3xl font-bold tracking-tight">CubeFeed</h1>
           </div>
           <UserWidget
             user={user}
@@ -257,10 +257,10 @@ export default function FollowingFeed() {
           <DaysSelector current={days} options={VALID_DAYS} />
           {!loading && persons !== null && (
             <p className="text-sm text-gray-500">
-              <span className="font-semibold text-gray-800">{totalPRs}</span> PRs von{" "}
-              <span className="font-semibold text-gray-800">{cubersWithPRs}</span> Cubern
-              in den letzten{" "}
-              <span className="font-semibold text-gray-800">{days}</span> Tagen
+              <span className="font-semibold text-gray-800">{totalPRs}</span> PRs from{" "}
+              <span className="font-semibold text-gray-800">{cubersWithPRs}</span> cuber{cubersWithPRs !== 1 ? "s" : ""}
+              {" "}in the last{" "}
+              <span className="font-semibold text-gray-800">{days}</span> days
             </p>
           )}
         </div>
@@ -301,7 +301,7 @@ function UserWidget({
     return (
       <div className="flex items-center gap-3">
         <span className="text-sm text-gray-600 hidden sm:block">
-          Eingeloggt als{" "}
+          Logged in as{" "}
           <span className="font-semibold text-gray-800">{user.username}</span>
         </span>
         <button
@@ -309,7 +309,7 @@ function UserWidget({
           onClick={onLogout}
           className="text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
         >
-          Abmelden
+          Log out
         </button>
       </div>
     );
@@ -321,7 +321,7 @@ function UserWidget({
       onClick={onLoginClick}
       className="text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-1.5 rounded-lg transition-colors"
     >
-      Einloggen
+      Log in
     </button>
   );
 }
@@ -425,7 +425,7 @@ function FollowingManager({
               <button
                 type="button"
                 onClick={() => onRemove(f.wcaId)}
-                aria-label={`${f.name} entfernen`}
+                aria-label={`Remove ${f.name}`}
                 className="text-blue-400 hover:text-blue-700 transition-colors text-base leading-none -mr-0.5"
               >
                 ×
@@ -444,7 +444,7 @@ function FollowingManager({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => { if (suggestions.length > 0) setIsOpen(true); }}
-            placeholder="Cuber hinzufügen (Name oder WCA-ID)…"
+            placeholder="Add cuber (name or WCA ID)…"
             className="w-full px-4 py-2 pr-9 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent placeholder:text-gray-400"
           />
           {isSearching ? (
@@ -492,8 +492,8 @@ function FollowingManager({
             })}
             {showNoResults && (
               <p className="px-4 py-3 text-sm text-gray-500">
-                Keine Treffer. WCA-ID direkt eingeben (z.B.{" "}
-                <span className="font-mono">2015MUEL01</span>) und Enter drücken.
+                No results. Enter a WCA ID directly (e.g.{" "}
+                <span className="font-mono">2015MUEL01</span>) and press Enter.
               </p>
             )}
           </div>
@@ -510,10 +510,10 @@ function EmptyFollowingState() {
     <div className="mt-12 flex flex-col items-center text-center gap-3">
       <div className="text-5xl">🔍</div>
       <h2 className="text-xl font-semibold text-gray-800">
-        Starte deinen persönlichen Feed
+        Start your personal feed
       </h2>
       <p className="text-gray-500 text-sm max-w-sm">
-        Suche oben nach einem Cuber oder gib eine WCA-ID ein, um dessen PRs zu verfolgen.
+        Search for a cuber above or enter a WCA ID to follow their PRs.
       </p>
     </div>
   );
@@ -542,9 +542,9 @@ function LoadingState() {
 function FetchErrorState() {
   return (
     <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-      <p className="text-red-700 font-medium">Fehler beim Laden der PRs</p>
+      <p className="text-red-700 font-medium">Error loading PRs</p>
       <p className="text-red-500 text-sm mt-1">
-        Bitte Seite neu laden oder später erneut versuchen.
+        Please reload the page or try again later.
       </p>
     </div>
   );
@@ -554,10 +554,10 @@ function NoPRsState({ days }: { days: number }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
       <p className="text-gray-500">
-        Keine PRs der gefolgten Cuber in den letzten {days} Tagen gefunden.
+        No PRs from followed cubers in the last {days} days.
       </p>
       <p className="text-gray-400 text-sm mt-1">
-        Versuche einen längeren Zeitraum.
+        Try a longer time range.
       </p>
     </div>
   );

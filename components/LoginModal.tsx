@@ -45,12 +45,12 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
       );
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Unbekannter Fehler.");
+        setError(data.error ?? "Unknown error.");
         return;
       }
       onSuccess(data);
     } catch {
-      setError("Netzwerkfehler. Bitte erneut versuchen.");
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-gray-900">
-            {mode === "login" ? "Einloggen" : "Konto erstellen"}
+            {mode === "login" ? "Log in" : "Create account"}
           </h2>
           <button
             type="button"
@@ -78,7 +78,7 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Benutzername
+              Username
             </label>
             <input
               ref={inputRef}
@@ -89,13 +89,13 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
               required
               minLength={3}
               className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
-              placeholder="z.B. max_cuber"
+              placeholder="e.g. max_cuber"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Passwort
+              Password
             </label>
             <input
               type="password"
@@ -105,7 +105,7 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
               required
               minLength={6}
               className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
-              placeholder="Mindestens 6 Zeichen"
+              placeholder="At least 6 characters"
             />
           </div>
 
@@ -121,34 +121,34 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium py-2 rounded-xl text-sm transition-colors"
           >
             {loading
-              ? "Bitte warten…"
+              ? "Please wait…"
               : mode === "login"
-              ? "Einloggen"
-              : "Konto erstellen"}
+              ? "Log in"
+              : "Create account"}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-gray-500">
           {mode === "login" ? (
             <>
-              Noch kein Konto?{" "}
+              No account yet?{" "}
               <button
                 type="button"
                 onClick={() => { setMode("register"); setError(""); }}
                 className="text-blue-600 hover:underline font-medium"
               >
-                Registrieren
+                Sign up
               </button>
             </>
           ) : (
             <>
-              Bereits registriert?{" "}
+              Already have an account?{" "}
               <button
                 type="button"
                 onClick={() => { setMode("login"); setError(""); }}
                 className="text-blue-600 hover:underline font-medium"
               >
-                Einloggen
+                Log in
               </button>
             </>
           )}

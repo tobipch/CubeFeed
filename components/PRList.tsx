@@ -112,7 +112,7 @@ export default function PRList({ persons }: Props) {
             onChange={(e) => setSelectedEvent(e.target.value)}
             className="font-sans text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
-            <option value="all">Alle Events</option>
+            <option value="all">All events</option>
             {eventIds.map((id) => (
               <option key={id} value={id}>
                 {eventName(id)}
@@ -121,7 +121,7 @@ export default function PRList({ persons }: Props) {
           </select>
           {selectedEvent !== "all" && (
             <span className="text-xs text-gray-400">
-              {filtered.length} Cuber
+              {filtered.length} cuber{filtered.length !== 1 ? "s" : ""}
             </span>
           )}
         </div>
