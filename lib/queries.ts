@@ -395,22 +395,20 @@ export async function getVirtualNRs(
     // ranks_single/ranks_average now carry country_id directly — no persons JOIN needed.
     const rows = await sql<{ event_id: string; type: string; time: number; country_id: string; nr: number }[]>`
       SELECT v.event_id, v.type, v.time::int, v.country_id,
-        CASE WHEN v.type = 'single' THEN (
-          SELECT MIN(rs.country_rank)
+        1 + CASE WHEN v.type = 'single' THEN (
+          SELECT COUNT(*)
           FROM ranks_single rs
-          WHERE rs.event_id    = v.event_id
-            AND rs.country_id  = v.country_id
-            AND rs.best       >= v.time
+          WHERE rs.event_id   = v.event_id
+            AND rs.country_id = v.country_id
+            AND rs.best        < v.time
             AND rs.best        > 0
-            AND rs.country_rank > 0
         ) ELSE (
-          SELECT MIN(ra.country_rank)
+          SELECT COUNT(*)
           FROM ranks_average ra
-          WHERE ra.event_id    = v.event_id
-            AND ra.country_id  = v.country_id
-            AND ra.best       >= v.time
+          WHERE ra.event_id   = v.event_id
+            AND ra.country_id = v.country_id
+            AND ra.best        < v.time
             AND ra.best        > 0
-            AND ra.country_rank > 0
         ) END AS nr
       FROM unnest(
         ${sql.array(eventIds)}::text[],

@@ -376,35 +376,6 @@ async function importRankBrackets(
   const ns = await importRankBracketsForType(singleFile, "single", personContinentMap);
   const na = await importRankBracketsForType(avgFile,    "average", personContinentMap);
   console.log(`  single: ${ns} brackets, average: ${na} brackets`);
-
-  // Fallback: any Swiss competitor with a best time that matches a bracket row
-  // is European, so their continent_rank is exact European rank for that time.
-  // This covers cases where personContinentMap failed to populate europe_rank.
-  await sql`
-    UPDATE rank_brackets rb
-    SET europe_rank = LEAST(
-      COALESCE(rb.europe_rank, rs.continent_rank),
-      rs.continent_rank
-    )
-    FROM ranks_single rs
-    WHERE rb.event_id = rs.event_id
-      AND rb.type = 'single'
-      AND rb.best = rs.best
-      AND rs.continent_rank > 0
-  `;
-  await sql`
-    UPDATE rank_brackets rb
-    SET europe_rank = LEAST(
-      COALESCE(rb.europe_rank, ra.continent_rank),
-      ra.continent_rank
-    )
-    FROM ranks_average ra
-    WHERE rb.event_id = ra.event_id
-      AND rb.type = 'average'
-      AND rb.best = ra.best
-      AND ra.continent_rank > 0
-  `;
-  console.log("  europe_rank fallback applied from Swiss ranks");
 }
 
 // ─── Cache builder ────────────────────────────────────────────────────────────
