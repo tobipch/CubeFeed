@@ -363,11 +363,12 @@ export async function getVirtualRankings(
 
 export async function getPersonCountries(personIds: string[]): Promise<Map<string, string>> {
   if (personIds.length === 0) return new Map();
-  const rows = await sql<{ id: string; country_id: string }[]>`
-    SELECT id, country_id FROM persons
-    WHERE id = ANY(${sql.array(personIds)}::text[]) AND country_id IS NOT NULL
+  const rows = await sql<{ wca_id: string; country_id: string }[]>`
+    SELECT wca_id, country_id FROM persons
+    WHERE wca_id = ANY(${sql.array(personIds)}::text[]) AND country_id IS NOT NULL
+    AND sub_id = 1
   `;
-  return new Map(rows.map((r) => [r.id, r.country_id]));
+  return new Map(rows.map((r) => [r.wca_id, r.country_id]));
 }
 
 /**
@@ -393,14 +394,14 @@ export async function getVirtualNRs(
         CASE WHEN v.type = 'single' THEN (
           SELECT COUNT(*)::int + 1
           FROM ranks_single rs
-          JOIN persons p ON p.wca_id = rs.person_id
+          JOIN persons p ON p.wca_id = rs.person_id AND p.sub_id = 1
           WHERE rs.event_id = v.event_id
             AND p.country_id = v.country_id
             AND rs.best > 0 AND rs.best < v.time
         ) ELSE (
           SELECT COUNT(*)::int + 1
           FROM ranks_average ra
-          JOIN persons p ON p.wca_id = ra.person_id
+          JOIN persons p ON p.wca_id = ra.person_id AND p.sub_id = 1
           WHERE ra.event_id = v.event_id
             AND p.country_id = v.country_id
             AND ra.best > 0 AND ra.best < v.time
