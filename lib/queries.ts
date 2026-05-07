@@ -315,6 +315,20 @@ function groupByPerson(rows: PRRow[]): PersonPRs[] {
 
 // ─── Virtual rankings ─────────────────────────────────────────────────────────
 
+// WCA country IDs (_Europe continent) — used for virtual CR computation.
+// WCA uses English country names as IDs. This list matches the _Europe continent
+// in the WCA database (includes Israel, Turkey, Russia per WCA regulations).
+const EUROPE_COUNTRY_IDS = [
+  "Albania", "Andorra", "Armenia", "Austria", "Azerbaijan", "Belarus", "Belgium",
+  "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czech Republic",
+  "Denmark", "Estonia", "Finland", "France", "Georgia", "Germany", "Gibraltar",
+  "Greece", "Hungary", "Iceland", "Ireland", "Israel", "Italy", "Kosovo",
+  "Latvia", "Liechtenstein", "Lithuania", "Luxembourg", "Malta", "Moldova",
+  "Monaco", "Montenegro", "Netherlands", "North Macedonia", "Norway", "Poland",
+  "Portugal", "Romania", "Russia", "San Marino", "Serbia", "Slovakia", "Slovenia",
+  "Spain", "Sweden", "Switzerland", "Turkey", "Ukraine", "United Kingdom",
+];
+
 interface VirtualRanking { wr: number | null; cr: number | null }
 
 /**
@@ -332,6 +346,7 @@ export async function getVirtualRankings(
     const types    = prs.map((p) => p.type);
     const times    = prs.map((p) => p.time);
 
+    const europeIds = sql.array(EUROPE_COUNTRY_IDS);
     const rows = await sql<
       { event_id: string; type: string; time: number; virtual_wr: number | null; virtual_cr: number | null }[]
     >`
@@ -339,16 +354,16 @@ export async function getVirtualRankings(
         MIN(rb.world_rank) AS virtual_wr,
         (1 + CASE WHEN v.type = 'single' THEN (
           SELECT COUNT(*) FROM ranks_single rs
-          WHERE rs.event_id    = v.event_id
-            AND rs.continent_id = '_Europe'
-            AND rs.best         < v.time
-            AND rs.best         > 0
+          WHERE rs.event_id  = v.event_id
+            AND rs.country_id = ANY(${europeIds}::text[])
+            AND rs.best       < v.time
+            AND rs.best       > 0
         ) ELSE (
           SELECT COUNT(*) FROM ranks_average ra
-          WHERE ra.event_id    = v.event_id
-            AND ra.continent_id = '_Europe'
-            AND ra.best         < v.time
-            AND ra.best         > 0
+          WHERE ra.event_id  = v.event_id
+            AND ra.country_id = ANY(${europeIds}::text[])
+            AND ra.best       < v.time
+            AND ra.best       > 0
         ) END)::int AS virtual_cr
       FROM unnest(
         ${sql.array(eventIds)}::text[],
