@@ -39,7 +39,7 @@ export default function DaysSelector({ current, options }: Props) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm text-gray-500 shrink-0">Letzte</span>
+      <span className="text-sm text-gray-500 shrink-0">Last</span>
       <div className="flex gap-1">
         {options.map((d) => (
           <button
@@ -52,7 +52,7 @@ export default function DaysSelector({ current, options }: Props) {
                 : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}
           >
-            {d} Tage
+            {d} days
           </button>
         ))}
       </div>

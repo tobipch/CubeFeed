@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, eventIconUrl, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
 
 interface Props {
   person: PersonPRs;
-  initialOpen?: boolean;
   highlightEvent?: string;
   bravos?: Record<string, number>;
   liked?: Set<string>;
@@ -21,13 +20,22 @@ interface DedupedPR {
 
 export default function PersonCard({
   person,
-  initialOpen = true,
   highlightEvent,
   bravos,
   liked,
   onBravo,
 }: Props) {
-  const [open, setOpen] = useState(initialOpen);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`https://www.worldcubeassociation.org/api/v0/persons/${person.personId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const thumb = data?.person?.avatar?.thumb_url;
+        if (thumb) setAvatarUrl(thumb);
+      })
+      .catch(() => {});
+  }, [person.personId]);
 
   // Deduplicate: for each (eventId, type) keep the most recent PR; if same
   // date, keep the better (lower) time. The displaced entry becomes prevTime.
@@ -76,78 +84,65 @@ export default function PersonCard({
       id={person.personId}
       className="bg-white rounded-xl border border-gray-200 scroll-mt-4 overflow-hidden"
     >
-      {/* Accordion header */}
-      <div
-        className="flex items-center justify-between px-5 py-4 cursor-pointer select-none hover:bg-gray-50 transition-colors"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <a
-            href={`https://www.worldcubeassociation.org/persons/${person.personId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {person.personName}
-          </a>
-          <span className="text-xs text-gray-400 font-mono shrink-0">
-            {person.personId}
-          </span>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+        <a
+          href={`https://www.worldcubeassociation.org/persons/${person.personId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate"
+        >
+          {person.personName}
+        </a>
+        <span className="text-xs text-gray-400 font-mono shrink-0">
+          {person.personId}
+        </span>
+        <div className="ml-auto shrink-0">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt={person.personName}
+              className="w-10 h-10 rounded-full object-cover ring-1 ring-gray-200"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse" />
+          )}
         </div>
-        <ChevronIcon open={open} />
       </div>
 
-      {/* Collapsible body */}
-      {open && (
-        <div className="px-5 pb-5 border-t border-gray-100">
-          <div className="flex flex-col gap-2 pt-3">
-            {eventGroups.map(([eventId, items]) => {
-              const dimmed = highlightEvent != null && eventId !== highlightEvent;
-              return (
-                <div
-                  key={eventId}
-                  className={`flex gap-2 flex-wrap transition-opacity duration-200 ${dimmed ? "opacity-30" : ""}`}
-                >
-                  {items.map((item, i) => {
-                    const key = `${person.personId}:${item.pr.eventId}:${item.pr.type}:${item.pr.time}`;
-                    return (
-                      <PRBadge
-                        key={`${item.pr.type}-${item.pr.competitionId}-${i}`}
-                        pr={item.pr}
-                        personId={person.personId}
-                        prevTime={item.prevTime}
-                        bravoCount={bravos?.[key] ?? 0}
-                        isLiked={liked?.has(key) ?? false}
-                        onBravo={
-                          onBravo
-                            ? () => onBravo(person.personId, item.pr.eventId, item.pr.type, item.pr.time)
-                            : undefined
-                        }
-                      />
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Badge list */}
+      <div className="px-3 py-2 flex flex-col gap-1.5">
+        {eventGroups.map(([eventId, items]) => {
+          const dimmed = highlightEvent != null && eventId !== highlightEvent;
+          return (
+            <div
+              key={eventId}
+              className={`flex flex-col gap-1 transition-opacity duration-200 ${dimmed ? "opacity-30" : ""}`}
+            >
+              {items.map((item, i) => {
+                const key = `${person.personId}:${item.pr.eventId}:${item.pr.type}:${item.pr.time}`;
+                return (
+                  <PRBadge
+                    key={`${item.pr.type}-${item.pr.competitionId}-${i}`}
+                    pr={item.pr}
+                    personId={person.personId}
+                    prevTime={item.prevTime}
+                    bravoCount={bravos?.[key] ?? 0}
+                    isLiked={liked?.has(key) ?? false}
+                    onBravo={
+                      onBravo
+                        ? () => onBravo(person.personId, item.pr.eventId, item.pr.type, item.pr.time)
+                        : undefined
+                    }
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
     </div>
-  );
-}
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      className={`w-5 h-5 text-gray-400 transition-transform shrink-0 ml-2 ${open ? "" : "-rotate-90"}`}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
   );
 }
 
@@ -182,22 +177,17 @@ function recordStripe(record: string): string {
 function badgeInlineStyle(
   isSingle: boolean,
   level: 0 | 1 | 2 | 3,
-  hasRecord: boolean
 ): React.CSSProperties {
   const shadows: string[] = [];
   const style: React.CSSProperties = {};
-
-  if (hasRecord) {
-    style.transform = "translateY(-4px)";
-  }
 
   if (level === 2) {
     style.background = isSingle
       ? "linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%)"
       : "linear-gradient(135deg,#fff7ed 0%,#fed7aa 100%)";
-    shadows.push(isSingle ? "0 4px 14px rgba(59,130,246,.3)" : "0 4px 14px rgba(249,115,22,.3)");
+    shadows.push(isSingle ? "0 2px 8px rgba(59,130,246,.25)" : "0 2px 8px rgba(249,115,22,.25)");
   } else if (level === 3) {
-    shadows.push(isSingle ? "0 4px 12px rgba(59,130,246,.2)" : "0 4px 12px rgba(249,115,22,.2)");
+    shadows.push(isSingle ? "0 2px 6px rgba(59,130,246,.2)" : "0 2px 6px rgba(249,115,22,.2)");
   }
 
   if (shadows.length) style.boxShadow = shadows.join(", ");
@@ -226,9 +216,12 @@ function PRBadge({
   const level = bravoLevel(bravoCount);
   const record = pr.regionalRecord && pr.regionalRecord !== "PR" ? pr.regionalRecord : null;
 
-  const typeColors = ["text-blue-500","text-blue-500","text-blue-600","text-blue-700"];
-  const typeColorOrange = ["text-orange-500","text-orange-500","text-orange-600","text-orange-700"];
-  const typeColor = isSingle ? typeColors[level] : typeColorOrange[level];
+  const typeColors = isSingle
+    ? (["text-blue-500","text-blue-500","text-blue-600","text-blue-700"] as const)
+    : (["text-orange-500","text-orange-500","text-orange-600","text-orange-700"] as const);
+  const typeColor = typeColors[level];
+
+  const dividerColor = isSingle ? "border-blue-200" : "border-orange-200";
 
   const heartColor = isLiked
     ? "text-red-500"
@@ -238,79 +231,82 @@ function PRBadge({
 
   return (
     <div
-      className={`group flex flex-col rounded-lg min-w-[9rem] flex-1 max-w-[14rem] transition-colors overflow-hidden ${record ? "relative z-10" : ""} ${badgeColorClasses(isSingle, level)}`}
-      style={badgeInlineStyle(isSingle, level, !!record)}
+      className={`group flex items-stretch rounded-lg w-full transition-colors overflow-hidden ${record ? "relative z-10" : ""} ${badgeColorClasses(isSingle, level)}`}
+      style={badgeInlineStyle(isSingle, level)}
     >
+      {/* Left record stripe */}
       {record && (
-        <div className="h-[5px] shrink-0" style={{ background: recordStripe(record) }} />
+        <div className="w-[4px] self-stretch shrink-0" style={{ background: recordStripe(record) }} />
       )}
+
+      {/* Main link — two-row layout */}
       <a
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex flex-col gap-1 px-3 pt-2 pb-1.5"
+        className="flex-1 px-3 py-2 min-w-0"
       >
-        {/* Event header */}
-        <div className="flex items-center gap-1.5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={eventIconUrl(pr.eventId)}
-            alt={eventName(pr.eventId)}
-            width={16}
-            height={16}
-            className="opacity-60"
-          />
-          <span className="text-xs font-medium text-gray-500 truncate">
-            {eventName(pr.eventId)}
-          </span>
-          <span className={`text-xs ml-auto font-medium shrink-0 ${typeColor}`}>
-            {typeLabel(pr.eventId, pr.type)}
+        {/* Row 1: icon + event name + type (left) | competition name (right) */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={eventIconUrl(pr.eventId)}
+              alt={eventName(pr.eventId)}
+              width={13}
+              height={13}
+              className="opacity-60 shrink-0"
+            />
+            <span className="text-xs font-medium text-gray-500">
+              {eventName(pr.eventId)}
+            </span>
+            <span className={`text-xs font-medium ${typeColor}`}>
+              {typeLabel(pr.eventId, pr.type)}
+            </span>
+          </div>
+          <span className="text-xs text-gray-400 truncate text-right ml-2 min-w-0">
+            {pr.competitionName}
           </span>
         </div>
 
-        {/* Time */}
-        <span className="text-lg font-bold font-mono text-gray-900">
-          {formatTime(pr.time, pr.eventId, pr.type)}
-        </span>
-
-        {/* Previous PR */}
-        {prevTime != null && prevTime > 0 && (
-          <span className="text-xs text-gray-400 -mt-0.5">
-            vorher <span className="font-mono">{formatTime(prevTime, pr.eventId, pr.type)}</span>
-          </span>
-        )}
-
-        {/* Rankings / record badges */}
-        <div className="flex gap-1 flex-wrap">
-          {pr.regionalRecord && pr.regionalRecord !== "PR" && (
-            <RecordHighlight record={pr.regionalRecord} />
-          )}
-          {pr.wr && <RankBadge label="WR" value={pr.wr} />}
-          {pr.cr && <RankBadge label="CR" value={pr.cr} />}
-          {pr.nr && <RankBadge label="NR" value={pr.nr} />}
+        {/* Row 2: PR time + prev (left) | NR CR WR (right) */}
+        <div className="flex items-baseline justify-between gap-2 mt-1">
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <span
+              className="text-base font-bold text-gray-900 tabular-nums shrink-0"
+              style={{ fontFamily: "var(--font-dm-mono)" }}
+            >
+              {formatTime(pr.time, pr.eventId, pr.type)}
+            </span>
+            <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
+              ({prevTime !== undefined
+                ? formatTime(prevTime, pr.eventId, pr.type)
+                : "no previous result"})
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {pr.nr && <RankBadge label="NR" value={pr.nr} />}
+            {pr.cr && <RankBadge label="CR" value={pr.cr} />}
+            {pr.wr && <RankBadge label="WR" value={pr.wr} />}
+          </div>
         </div>
-
-        {/* Competition */}
-        <span className="text-xs text-gray-400 group-hover:text-gray-600 truncate transition-colors">
-          {pr.competitionName}
-        </span>
       </a>
 
-      {/* Bravo button row */}
-      <div className="flex justify-end px-2 pb-1.5">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onBravo?.();
-          }}
-          className={`flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full transition-colors ${heartColor}`}
-          aria-label={isLiked ? "Bravo entfernen" : "Bravo geben"}
-        >
-          <HeartIcon filled={isLiked} />
-          {bravoCount > 0 && <span>{bravoCount}</span>}
-        </button>
-      </div>
+      {/* Divider + heart — entire area is clickable */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onBravo?.();
+        }}
+        className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
+        aria-label={isLiked ? "Remove bravo" : "Give bravo"}
+      >
+        <HeartIcon filled={isLiked} />
+        {bravoCount > 0 && (
+          <span className="text-xs leading-none">{bravoCount}</span>
+        )}
+      </button>
     </div>
   );
 }
@@ -319,7 +315,7 @@ function HeartIcon({ filled }: { filled: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="w-3 h-3 shrink-0"
+      className="w-5 h-5 shrink-0"
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth={2}

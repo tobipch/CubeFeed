@@ -146,6 +146,80 @@ export async function getAllSwissRanks(): Promise<RankMap> {
   return { single, average };
 }
 
+export async function fetchPRsForPersons(personIds: string[], days: number): Promise<PersonPRs[]> {
+  if (personIds.length === 0) return [];
+  const rows = await sql<PRRow[]>`
+    SELECT
+      r.person_id,
+      r.person_name,
+      r.event_id,
+      r.competition_id,
+      c.name            AS competition_name,
+      c.city_name,
+      c.end_date::text  AS end_date,
+      r.best,
+      r.average,
+      r.regional_single_record,
+      r.regional_average_record,
+      rs.world_rank     AS single_wr,
+      rs.continent_rank AS single_cr,
+      rs.country_rank   AS single_nr,
+      ra.world_rank     AS avg_wr,
+      ra.continent_rank AS avg_cr,
+      ra.country_rank   AS avg_nr,
+      (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)       AS is_single_pr,
+      (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best) AS is_avg_pr,
+      (
+        SELECT MIN(r2.best) FROM results r2
+        WHERE r2.person_id = r.person_id
+          AND r2.event_id  = r.event_id
+          AND r2.best > r.best AND r2.best > 0
+      ) AS prev_single_best,
+      (
+        SELECT MIN(r2.average) FROM results r2
+        WHERE r2.person_id = r.person_id
+          AND r2.event_id  = r.event_id
+          AND r2.average > r.average AND r2.average > 0
+      ) AS prev_avg_best
+    FROM results r
+    JOIN competitions c ON r.competition_id = c.id
+    LEFT JOIN ranks_single rs
+           ON r.person_id = rs.person_id AND r.event_id = rs.event_id
+    LEFT JOIN ranks_average ra
+           ON r.person_id = ra.person_id AND r.event_id = ra.event_id
+    WHERE
+      r.person_id = ANY(${sql.array(personIds)}::text[])
+      AND c.end_date >= CURRENT_DATE - (${days} * interval '1 day')
+      AND c.end_date <= CURRENT_DATE + interval '1 day'
+      AND (
+        (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
+        OR
+        (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best)
+      )
+    ORDER BY c.end_date DESC, r.person_name, r.event_id
+  `;
+  return groupByPerson(rows);
+}
+
+export async function getRanksForPersons(personIds: string[]): Promise<RankMap> {
+  if (personIds.length === 0) return { single: new Map(), average: new Map() };
+  const [singles, averages] = await Promise.all([
+    sql<{ person_id: string; event_id: string; best: number }[]>`
+      SELECT person_id, event_id, best FROM ranks_single
+      WHERE person_id = ANY(${sql.array(personIds)}::text[])
+    `,
+    sql<{ person_id: string; event_id: string; best: number }[]>`
+      SELECT person_id, event_id, best FROM ranks_average
+      WHERE person_id = ANY(${sql.array(personIds)}::text[])
+    `,
+  ]);
+  const single = new Map<string, number>();
+  const average = new Map<string, number>();
+  for (const r of singles) single.set(`${r.person_id}:${r.event_id}`, r.best);
+  for (const r of averages) average.set(`${r.person_id}:${r.event_id}`, r.best);
+  return { single, average };
+}
+
 export async function getDbCompetitionIds(): Promise<Set<string>> {
   // Only competitions with actual results are considered "in the DB".
   // A competition row may exist before results are imported, so filtering
@@ -155,6 +229,26 @@ export async function getDbCompetitionIds(): Promise<Set<string>> {
     SELECT DISTINCT competition_id FROM results
   `;
   return new Set(rows.map((r) => r.competition_id));
+}
+
+// Builds a per-person map of competition IDs that are already in the DB.
+// Used by the feed to ensure a competition is only skipped for a specific
+// person if THAT person's results are already imported — non-Swiss cubers
+// (whose results are never imported) always get an empty set.
+export async function getKnownCompetitionsByPerson(
+  personIds: string[]
+): Promise<Map<string, Set<string>>> {
+  if (personIds.length === 0) return new Map();
+  const rows = await sql<{ person_id: string; competition_id: string }[]>`
+    SELECT DISTINCT person_id, competition_id FROM results
+    WHERE person_id = ANY(${sql.array(personIds)}::text[])
+  `;
+  const map = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!map.has(row.person_id)) map.set(row.person_id, new Set());
+    map.get(row.person_id)!.add(row.competition_id);
+  }
+  return map;
 }
 
 function nullStr(val: string | null): string | null {
@@ -221,6 +315,20 @@ function groupByPerson(rows: PRRow[]): PersonPRs[] {
 
 // ─── Virtual rankings ─────────────────────────────────────────────────────────
 
+// WCA country IDs (_Europe continent) — used for virtual CR computation.
+// WCA uses English country names as IDs. This list matches the _Europe continent
+// in the WCA database (includes Israel, Turkey, Russia per WCA regulations).
+const EUROPE_COUNTRY_IDS = [
+  "Albania", "Andorra", "Armenia", "Austria", "Azerbaijan", "Belarus", "Belgium",
+  "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czech Republic",
+  "Denmark", "Estonia", "Finland", "France", "Georgia", "Germany", "Gibraltar",
+  "Greece", "Hungary", "Iceland", "Ireland", "Israel", "Italy", "Kosovo",
+  "Latvia", "Liechtenstein", "Lithuania", "Luxembourg", "Malta", "Moldova",
+  "Monaco", "Montenegro", "Netherlands", "North Macedonia", "Norway", "Poland",
+  "Portugal", "Romania", "Russia", "San Marino", "Serbia", "Slovakia", "Slovenia",
+  "Spain", "Sweden", "Switzerland", "Turkey", "Ukraine", "United Kingdom",
+];
+
 interface VirtualRanking { wr: number | null; cr: number | null }
 
 /**
@@ -238,12 +346,25 @@ export async function getVirtualRankings(
     const types    = prs.map((p) => p.type);
     const times    = prs.map((p) => p.time);
 
+    const europeIds = sql.array(EUROPE_COUNTRY_IDS);
     const rows = await sql<
       { event_id: string; type: string; time: number; virtual_wr: number | null; virtual_cr: number | null }[]
     >`
       SELECT v.event_id, v.type, v.time::int,
-        MIN(rb.world_rank)  AS virtual_wr,
-        MIN(rb.europe_rank) AS virtual_cr
+        MIN(rb.world_rank) AS virtual_wr,
+        (1 + CASE WHEN v.type = 'single' THEN (
+          SELECT COUNT(*) FROM ranks_single rs
+          WHERE rs.event_id  = v.event_id
+            AND rs.country_id = ANY(${europeIds}::text[])
+            AND rs.best       < v.time
+            AND rs.best       > 0
+        ) ELSE (
+          SELECT COUNT(*) FROM ranks_average ra
+          WHERE ra.event_id  = v.event_id
+            AND ra.country_id = ANY(${europeIds}::text[])
+            AND ra.best       < v.time
+            AND ra.best       > 0
+        ) END)::int AS virtual_cr
       FROM unnest(
         ${sql.array(eventIds)}::text[],
         ${sql.array(types)}::text[],
@@ -261,6 +382,71 @@ export async function getVirtualRankings(
         `${r.event_id}:${r.type}:${r.time}`,
         { wr: r.virtual_wr, cr: r.virtual_cr },
       ])
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+export async function getPersonCountries(personIds: string[]): Promise<Map<string, string>> {
+  if (personIds.length === 0) return new Map();
+  // Query from ranks_single (which now stores country_id) — avoids any persons sub_id issues.
+  const rows = await sql<{ person_id: string; country_id: string }[]>`
+    SELECT DISTINCT ON (person_id) person_id, country_id
+    FROM ranks_single
+    WHERE person_id = ANY(${sql.array(personIds)}::text[]) AND country_id IS NOT NULL
+  `;
+  return new Map(rows.map((r) => [r.person_id, r.country_id]));
+}
+
+/**
+ * For each (eventId, type, time, countryId) entry, returns the virtual national
+ * rank: 1 + count of persons from the same country with a strictly better time
+ * in ranks_single / ranks_average.
+ * Key format: "eventId:type:time:countryId"
+ * Requires indexes on ranks_single(event_id, best) and ranks_average(event_id, best).
+ */
+export async function getVirtualNRs(
+  prs: Array<{ eventId: string; type: "single" | "average"; time: number; countryId: string }>
+): Promise<Map<string, number>> {
+  if (prs.length === 0) return new Map();
+
+  const eventIds   = prs.map((p) => p.eventId);
+  const types      = prs.map((p) => p.type);
+  const times      = prs.map((p) => p.time);
+  const countryIds = prs.map((p) => p.countryId);
+
+  try {
+    // Bracket approach: MIN(country_rank) among entries with best >= new_time
+    // gives the virtual NR (same logic as rank_brackets for WR/CR).
+    // ranks_single/ranks_average now carry country_id directly — no persons JOIN needed.
+    const rows = await sql<{ event_id: string; type: string; time: number; country_id: string; nr: number }[]>`
+      SELECT v.event_id, v.type, v.time::int, v.country_id,
+        1 + CASE WHEN v.type = 'single' THEN (
+          SELECT COUNT(*)
+          FROM ranks_single rs
+          WHERE rs.event_id   = v.event_id
+            AND rs.country_id = v.country_id
+            AND rs.best        < v.time
+            AND rs.best        > 0
+        ) ELSE (
+          SELECT COUNT(*)
+          FROM ranks_average ra
+          WHERE ra.event_id   = v.event_id
+            AND ra.country_id = v.country_id
+            AND ra.best        < v.time
+            AND ra.best        > 0
+        ) END AS nr
+      FROM unnest(
+        ${sql.array(eventIds)}::text[],
+        ${sql.array(types)}::text[],
+        ${sql.array(times)}::int[],
+        ${sql.array(countryIds)}::text[]
+      ) AS v(event_id, type, time, country_id)
+    `;
+
+    return new Map(
+      rows.map((r) => [`${r.event_id}:${r.type}:${r.time}:${r.country_id}`, r.nr])
     );
   } catch {
     return new Map();

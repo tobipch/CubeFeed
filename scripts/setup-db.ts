@@ -73,6 +73,7 @@ async function main() {
       world_rank     INTEGER,
       continent_rank INTEGER,
       country_rank   INTEGER,
+      country_id     TEXT,
       PRIMARY KEY (person_id, event_id)
     )
   `;
@@ -85,6 +86,7 @@ async function main() {
       world_rank     INTEGER,
       continent_rank INTEGER,
       country_rank   INTEGER,
+      country_id     TEXT,
       PRIMARY KEY (person_id, event_id)
     )
   `;
@@ -126,6 +128,38 @@ async function main() {
       ON competitions (end_date)
   `;
 
+  // Migrate: add country_id and continent_id columns to existing ranks tables if not present
+  await sql`ALTER TABLE ranks_single  ADD COLUMN IF NOT EXISTS country_id TEXT`;
+  await sql`ALTER TABLE ranks_average ADD COLUMN IF NOT EXISTS country_id TEXT`;
+  await sql`ALTER TABLE ranks_single  ADD COLUMN IF NOT EXISTS continent_id TEXT`;
+  await sql`ALTER TABLE ranks_average ADD COLUMN IF NOT EXISTS continent_id TEXT`;
+
+  // Indexes for virtual NR/CR lookup (event_id, country_id/continent_id, best)
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_single_event_country_best
+      ON ranks_single (event_id, country_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_average_event_country_best
+      ON ranks_average (event_id, country_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_single_event_continent_best
+      ON ranks_single (event_id, continent_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_ranks_average_event_continent_best
+      ON ranks_average (event_id, continent_id, best)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_persons_wca_id
+      ON persons (wca_id)
+  `;
+
   // Migration: drop old single-column bravos table (person_id only) if it exists
   await sql`
     DO $$
@@ -149,6 +183,39 @@ async function main() {
       time      INTEGER NOT NULL,
       count     INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (person_id, event_id, type, time)
+    )
+  `;
+
+  // ── Auth tables ──────────────────────────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id            SERIAL PRIMARY KEY,
+      username      TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token      TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMP NOT NULL
+    )
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user
+      ON user_sessions (user_id)
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_following (
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      wca_id   TEXT NOT NULL,
+      name     TEXT NOT NULL,
+      added_at TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (user_id, wca_id)
     )
   `;
 
