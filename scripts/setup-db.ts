@@ -223,6 +223,8 @@ async function main() {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_id TEXT UNIQUE`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_account_id INTEGER UNIQUE`;
   await sql`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_name TEXT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_avatar_url TEXT`;
 
   console.log("All tables created successfully.");
   await sql.end();

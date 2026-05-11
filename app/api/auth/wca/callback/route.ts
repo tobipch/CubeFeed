@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
     const { me } = await meRes.json();
     const wcaAccountId: number = me.id;
     const wcaId: string | null = me.wca_id ?? null;
+    const wcaName: string = me.name;
+    const wcaAvatarUrl: string | null = me.avatar?.thumb_url ?? me.avatar?.url ?? null;
 
     let userId: number;
     const existing = await sql<{ id: number }[]>`
@@ -61,15 +63,18 @@ export async function GET(req: NextRequest) {
 
     if (existing.length > 0) {
       userId = existing[0].id;
-      if (wcaId) {
-        await sql`UPDATE users SET wca_id = ${wcaId} WHERE id = ${userId}`;
-      }
+      await sql`
+        UPDATE users
+        SET wca_id = COALESCE(${wcaId}, wca_id),
+            wca_name = ${wcaName},
+            wca_avatar_url = ${wcaAvatarUrl}
+        WHERE id = ${userId}
+      `;
     } else {
-      // Use WCA competition ID as username if available, otherwise wca_<id>
       const username = wcaId ?? `wca_${wcaAccountId}`;
       const inserted = await sql<{ id: number }[]>`
-        INSERT INTO users (username, password_hash, wca_id, wca_account_id)
-        VALUES (${username}, NULL, ${wcaId}, ${wcaAccountId})
+        INSERT INTO users (username, password_hash, wca_id, wca_account_id, wca_name, wca_avatar_url)
+        VALUES (${username}, NULL, ${wcaId}, ${wcaAccountId}, ${wcaName}, ${wcaAvatarUrl})
         RETURNING id
       `;
       userId = inserted[0].id;

@@ -15,6 +15,9 @@ interface FollowedPerson {
 interface AuthUser {
   id: number;
   username: string;
+  wca_id: string | null;
+  wca_name: string | null;
+  wca_avatar_url: string | null;
 }
 
 interface SearchResult {
@@ -298,18 +301,31 @@ function UserWidget({
   onLogout: () => void;
 }) {
   if (user) {
+    const displayName = user.wca_name ?? user.username;
     return (
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {user.wca_avatar_url && (
+          <img
+            src={user.wca_avatar_url}
+            alt={displayName}
+            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+          />
+        )}
         <span className="text-sm text-gray-600 hidden sm:block">
-          Logged in as{" "}
-          <span className="font-semibold text-gray-800">{user.username}</span>
+          Hallo{" "}
+          <span className="font-semibold text-gray-800">{displayName}</span>
         </span>
         <button
           type="button"
           onClick={onLogout}
-          className="text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors ml-1"
         >
-          Log out
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Ausloggen
         </button>
       </div>
     );
