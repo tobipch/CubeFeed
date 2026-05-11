@@ -99,7 +99,7 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
           Mit WCA-Account anmelden
         </a>
 
-        <div className="flex items-center gap-3 text-xs text-gray-400">
+        <div className="flex items-center gap-3 text-xs text-gray-400 my-2">
           <div className="flex-1 h-px bg-gray-200" />
           oder
           <div className="flex-1 h-px bg-gray-200" />
