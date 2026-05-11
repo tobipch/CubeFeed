@@ -11,12 +11,14 @@ export async function GET() {
     const user = await getCurrentUser();
     if (!user) return Response.json({ error: "Nicht eingeloggt." }, { status: 401 });
 
-    const rows = await sql<{ wca_id: string; name: string }[]>`
-      SELECT wca_id, name FROM user_following
+    const rows = await sql<{ wca_id: string; name: string; country_id: string | null }[]>`
+      SELECT uf.wca_id, uf.name,
+        (SELECT p.country_id FROM persons p WHERE p.wca_id = uf.wca_id ORDER BY p.sub_id DESC LIMIT 1) as country_id
+      FROM user_following uf
       WHERE user_id = ${user.id}
       ORDER BY added_at ASC
     `;
-    return Response.json(rows.map((r) => ({ wcaId: r.wca_id, name: r.name })));
+    return Response.json(rows.map((r) => ({ wcaId: r.wca_id, name: r.name, countryIso2: r.country_id ?? "" })));
   } catch {
     return Response.json({ error: "Interner Fehler." }, { status: 500 });
   }
