@@ -14,9 +14,11 @@ function bravoKey(personId: string, eventId: string, type: string, time: number)
 
 interface Props {
   persons: PersonPRs[];
+  isLoggedIn?: boolean;
+  onLoginRequired?: () => void;
 }
 
-export default function PRList({ persons }: Props) {
+export default function PRList({ persons, isLoggedIn, onLoginRequired }: Props) {
   const [selectedEvent, setSelectedEvent] = useState<string>("all");
   const [bravos, setBravos] = useState<Record<string, number>>({});
   const [liked, setLiked] = useState<Set<string>>(new Set());
@@ -38,6 +40,10 @@ export default function PRList({ persons }: Props) {
     type: string,
     time: number
   ) => {
+    if (!isLoggedIn) {
+      onLoginRequired?.();
+      return;
+    }
     const key = bravoKey(personId, eventId, type, time);
     const isLiked = liked.has(key);
     const delta = isLiked ? -1 : 1;

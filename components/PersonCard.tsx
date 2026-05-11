@@ -278,11 +278,11 @@ function PRBadge({
             >
               {formatTime(pr.time, pr.eventId, pr.type)}
             </span>
-            <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
-              ({prevTime !== undefined
-                ? formatTime(prevTime, pr.eventId, pr.type)
-                : "no previous result"})
-            </span>
+            {prevTime !== undefined && (
+              <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
+                ({formatTime(prevTime, pr.eventId, pr.type)})
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {pr.nr && <RankBadge label="NR" value={pr.nr} />}

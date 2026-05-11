@@ -280,7 +280,11 @@ export default function FollowingFeed() {
         <NoPRsState days={days} />
       )}
       {following.length > 0 && !loading && !fetchError && persons && persons.length > 0 && (
-        <PRList persons={persons} />
+        <PRList
+          persons={persons}
+          isLoggedIn={user !== null}
+          onLoginRequired={() => setShowLoginModal(true)}
+        />
       )}
 
       {showLoginModal && (
