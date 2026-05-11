@@ -68,19 +68,21 @@ export default function FollowingFeed() {
       fetch("/api/user/following")
         .then((r) => r.json())
         .then((data: FollowedPerson[]) => {
-          let list = Array.isArray(data) ? data : [];
+          const list = Array.isArray(data) ? data : [];
           if (user.wca_id && user.wca_name && !list.some((f) => f.wcaId === user.wca_id)) {
-            const self: FollowedPerson = { wcaId: user.wca_id, name: user.wca_name };
-            list = [self, ...list];
-            fetch("/api/user/following", {
+            const withSelf = [{ wcaId: user.wca_id, name: user.wca_name }, ...list];
+            return fetch("/api/user/following", {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(list),
-            }).catch(() => {});
+              body: JSON.stringify(withSelf),
+            })
+              .then(() => fetch("/api/user/following"))
+              .then((r) => r.json())
+              .then((updated: FollowedPerson[]) => Array.isArray(updated) ? updated : withSelf);
           }
-          setFollowing(list);
-          setHydrated(true);
+          return list;
         })
+        .then((list) => { setFollowing(list); setHydrated(true); })
         .catch(() => setHydrated(true));
     } else {
       try {
@@ -357,6 +359,7 @@ function FollowingSection({
   onAdd: (person: FollowedPerson) => void;
   onRemove: (wcaId: string) => void;
 }) {
+  const [listOpen, setListOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -520,51 +523,63 @@ function FollowingSection({
   // ── Non-empty state: list + search ──
   return (
     <div className="mb-6 border border-gray-200 rounded-2xl overflow-visible">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl">
+      {/* Header – click to toggle list */}
+      <button
+        type="button"
+        onClick={() => setListOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50/60 rounded-t-2xl hover:bg-gray-100/60 transition-colors"
+      >
         <span className="text-sm font-semibold text-gray-700">
           Following {following.length} cuber{following.length !== 1 ? "s" : ""}
         </span>
-      </div>
+        <svg
+          className={`w-4 h-4 text-gray-400 transition-transform ${listOpen ? "rotate-180" : ""}`}
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        >
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
 
-      {/* Add search */}
-      <div className="px-3 py-2.5 border-b border-gray-100">
-        {searchInput(false)}
-      </div>
-
-      {/* List */}
-      <div>
-        {following.map((f, i) => {
-          const isSelf = f.wcaId === userWcaId;
-          return (
-            <div
-              key={f.wcaId}
-              className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${
-                i < following.length - 1 ? "border-b border-gray-100" : "rounded-b-2xl"
-              }`}
-            >
-              <span className="text-xl w-7 text-center flex-shrink-0">{flagEmoji(f.countryIso2)}</span>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm text-gray-900 truncate">{f.name}</div>
-                <div className="text-xs font-mono text-gray-400">{f.wcaId}</div>
+      {/* Collapsible list */}
+      {listOpen && (
+        <div className="border-t border-gray-100">
+          {following.map((f, i) => {
+            const isSelf = f.wcaId === userWcaId;
+            return (
+              <div
+                key={f.wcaId}
+                className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${
+                  i < following.length - 1 ? "border-b border-gray-100" : ""
+                }`}
+              >
+                <span className="text-xl w-7 text-center flex-shrink-0">{flagEmoji(f.countryIso2)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm text-gray-900 truncate">{f.name}</div>
+                  <div className="text-xs font-mono text-gray-400">{f.wcaId}</div>
+                </div>
+                {isSelf ? (
+                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md font-medium shrink-0">
+                    You
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(f.wcaId)}
+                    aria-label={`Unfollow ${f.name}`}
+                    className="text-gray-300 hover:text-red-400 transition-colors text-xl leading-none shrink-0 w-7 text-center"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
-              {isSelf ? (
-                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md font-medium shrink-0">
-                  You
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onRemove(f.wcaId)}
-                  aria-label={`Unfollow ${f.name}`}
-                  className="text-gray-300 hover:text-red-400 transition-colors text-xl leading-none shrink-0 w-7 text-center"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add search – always visible */}
+      <div className={`px-3 py-2.5 ${listOpen ? "border-t border-gray-100" : "border-t border-gray-100 rounded-b-2xl"}`}>
+        {searchInput(false)}
       </div>
     </div>
   );
