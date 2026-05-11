@@ -126,7 +126,8 @@ async function importRanks(
   personCountryMap: Map<string, string>, personContinentMap: Map<string, string>
 ): Promise<void> {
   console.log(`Importing ${table}...`);
-  await sql`TRUNCATE ${sql(table)}`;
+  // No TRUNCATE — upsert so prev_best is preserved across imports.
+  // Stale rows (persons who lost a rank) are harmless for our use case.
   const rows: { person_id: string; event_id: string; best: number; world_rank: number; continent_rank: number; country_rank: number; country_id: string | null; continent_id: string | null }[] = [];
   for await (const row of readTSV(filePath)) {
     const personId = col(row, "person_id", "personId");
@@ -141,7 +142,15 @@ async function importRanks(
   }
   const deduped = deduplicateBy(rows, (r) => `${r.person_id}:${r.event_id}`);
   await batchInsert(deduped, async (batch) => {
-    await sql`INSERT INTO ${sql(table)} ${sql(batch)} ON CONFLICT (person_id, event_id) DO UPDATE SET best=EXCLUDED.best, world_rank=EXCLUDED.world_rank, continent_rank=EXCLUDED.continent_rank, country_rank=EXCLUDED.country_rank, country_id=EXCLUDED.country_id, continent_id=EXCLUDED.continent_id`;
+    if (table === "ranks_single") {
+      await sql`INSERT INTO ranks_single ${sql(batch)} ON CONFLICT (person_id, event_id) DO UPDATE SET
+        prev_best = CASE WHEN ranks_single.best != EXCLUDED.best THEN ranks_single.best ELSE ranks_single.prev_best END,
+        best=EXCLUDED.best, world_rank=EXCLUDED.world_rank, continent_rank=EXCLUDED.continent_rank, country_rank=EXCLUDED.country_rank, country_id=EXCLUDED.country_id, continent_id=EXCLUDED.continent_id`;
+    } else {
+      await sql`INSERT INTO ranks_average ${sql(batch)} ON CONFLICT (person_id, event_id) DO UPDATE SET
+        prev_best = CASE WHEN ranks_average.best != EXCLUDED.best THEN ranks_average.best ELSE ranks_average.prev_best END,
+        best=EXCLUDED.best, world_rank=EXCLUDED.world_rank, continent_rank=EXCLUDED.continent_rank, country_rank=EXCLUDED.country_rank, country_id=EXCLUDED.country_id, continent_id=EXCLUDED.continent_id`;
+    }
   });
   console.log(`  Imported ${deduped.length} ${table} entries`);
 }
