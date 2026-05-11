@@ -251,7 +251,7 @@ function PRBadge({
         rel="noopener noreferrer"
         className="flex-1 px-3 py-2 min-w-0"
       >
-        {/* Row 1: icon + event + type | records(mobile) or comp name(desktop) */}
+        {/* Row 1: icon + event + type (left) | competition name (right, truncated) */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -269,44 +269,31 @@ function PRBadge({
               {typeLabel(pr.eventId, pr.type)}
             </span>
           </div>
-          {/* Records visible on mobile in row 1 */}
-          <div className="flex sm:hidden items-center gap-1 shrink-0">
-            {pr.nr && <RankBadge label="NR" value={pr.nr} />}
-            {pr.cr && <RankBadge label="CR" value={pr.cr} />}
-            {pr.wr && <RankBadge label="WR" value={pr.wr} />}
-          </div>
-          {/* Competition name visible on desktop in row 1 */}
-          <span className="hidden sm:block text-xs text-gray-400 truncate text-right ml-2 min-w-0">
+          <span className="text-xs text-gray-400 truncate text-right ml-2 min-w-0">
             {pr.competitionName}
           </span>
         </div>
 
-        {/* Row 2: PR time + prev | records(desktop) */}
-        <div className="flex items-baseline justify-between gap-2 mt-1">
-          <div className="flex items-baseline gap-1.5 min-w-0">
+        {/* Row 2: time + prev (left) | records (right, wraps to next line if no room) */}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1">
+          <div className="flex items-baseline gap-1.5 shrink-0">
             <span
-              className="text-base font-bold text-gray-900 tabular-nums shrink-0"
+              className="text-base font-bold text-gray-900 tabular-nums"
               style={{ fontFamily: "var(--font-dm-mono)" }}
             >
               {formatTime(pr.time, pr.eventId, pr.type)}
             </span>
             {prevTime !== undefined && (
-              <span className="text-xs text-gray-400 font-mono tabular-nums shrink-0">
+              <span className="text-xs text-gray-400 font-mono tabular-nums">
                 ({formatTime(prevTime, pr.eventId, pr.type)})
               </span>
             )}
           </div>
-          {/* Records on desktop in row 2 */}
-          <div className="hidden sm:flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 ml-auto shrink-0">
             {pr.nr && <RankBadge label="NR" value={pr.nr} />}
             {pr.cr && <RankBadge label="CR" value={pr.cr} />}
             {pr.wr && <RankBadge label="WR" value={pr.wr} />}
           </div>
-        </div>
-
-        {/* Row 3 (mobile only): competition name */}
-        <div className="sm:hidden text-xs text-gray-400 truncate mt-0.5">
-          {pr.competitionName}
         </div>
       </a>
 

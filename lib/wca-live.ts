@@ -405,7 +405,7 @@ async function processCompetitionForPersons(
             regionalRecord: entry.singleRecord !== "PR" ? entry.singleRecord : null,
             isLive: true,
             liveUrl,
-            prevTime: dbBest ?? undefined,
+            prevTime: (dbBest && dbBest > entry.best) ? dbBest : undefined,
           });
         }
 
@@ -425,7 +425,7 @@ async function processCompetitionForPersons(
             regionalRecord: entry.averageRecord !== "PR" ? entry.averageRecord : null,
             isLive: true,
             liveUrl,
-            prevTime: dbAvgBest ?? undefined,
+            prevTime: (dbAvgBest && dbAvgBest > entry.average) ? dbAvgBest : undefined,
           });
         }
       }
@@ -502,7 +502,7 @@ async function processCompetition(
               regionalRecord: entry.singleRecord !== "PR" ? entry.singleRecord : null,
               isLive: true,
               liveUrl,
-              prevTime: dbBest ?? undefined,
+              prevTime: (dbBest && dbBest > entry.best) ? dbBest : undefined,
             });
           }
         }
@@ -526,7 +526,7 @@ async function processCompetition(
               regionalRecord: entry.averageRecord !== "PR" ? entry.averageRecord : null,
               isLive: true,
               liveUrl,
-              prevTime: dbAvgBest ?? undefined,
+              prevTime: (dbAvgBest && dbAvgBest > entry.average) ? dbAvgBest : undefined,
             });
           }
         }
