@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { wcaCountryToIso2 } from "@/lib/wca-countries";
 
 interface FollowedPerson {
   wcaId: string;
@@ -18,7 +19,7 @@ export async function GET() {
       WHERE user_id = ${user.id}
       ORDER BY added_at ASC
     `;
-    return Response.json(rows.map((r) => ({ wcaId: r.wca_id, name: r.name, countryIso2: r.country_id ?? "" })));
+    return Response.json(rows.map((r) => ({ wcaId: r.wca_id, name: r.name, countryIso2: wcaCountryToIso2(r.country_id ?? "") })));
   } catch {
     return Response.json({ error: "Interner Fehler." }, { status: 500 });
   }

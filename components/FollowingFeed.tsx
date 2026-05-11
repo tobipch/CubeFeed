@@ -7,6 +7,19 @@ import PRList from "./PRList";
 import DaysSelector from "./DaysSelector";
 import LoginModal from "./LoginModal";
 
+function WcaAvatar({ wcaId, name }: { wcaId: string; name: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(`https://www.worldcubeassociation.org/api/v0/persons/${wcaId}`)
+      .then((r) => r.json())
+      .then((d) => { const t = d?.person?.avatar?.thumb_url; if (t) setUrl(t); })
+      .catch(() => {});
+  }, [wcaId]);
+  if (!url) return <div className="w-7 h-7 rounded-full bg-gray-100 shrink-0" />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt={name} className="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200 shrink-0" />;
+}
+
 interface FollowedPerson {
   wcaId: string;
   name: string;
@@ -552,13 +565,18 @@ function FollowingSection({
             return (
               <div
                 key={f.wcaId}
-                className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${
+                className={`flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-gray-50 ${
                   i < following.length - 1 ? "border-b border-gray-100" : ""
                 }`}
               >
-                <span className="text-xl w-7 text-center flex-shrink-0">{flagEmoji(f.countryIso2)}</span>
+                <WcaAvatar wcaId={f.wcaId} name={f.name} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm text-gray-900 truncate">{f.name}</div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-medium text-sm text-gray-900 truncate">{f.name}</span>
+                    {f.countryIso2 && (
+                      <span className="text-base leading-none shrink-0">{flagEmoji(f.countryIso2)}</span>
+                    )}
+                  </div>
                   <div className="text-xs font-mono text-gray-400">{f.wcaId}</div>
                 </div>
                 {isSelf ? (

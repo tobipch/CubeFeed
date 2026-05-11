@@ -54,7 +54,12 @@ export default function PersonCard({
       return a.time - b.time;
     });
     const current = sorted[0];
-    const prevTime = sorted.length > 1 ? sorted[1].time : current.prevTime;
+    // Only use a displaced entry as prevTime if it's from a different competition;
+    // same-competition entries are just duplicate rounds with the same best time.
+    const prevTime =
+      sorted.length > 1 && sorted[1].competitionId !== sorted[0].competitionId
+        ? sorted[1].time
+        : current.prevTime;
     dedupedPRs.push({ pr: current, prevTime });
   }
 
@@ -239,14 +244,14 @@ function PRBadge({
         <div className="w-[4px] self-stretch shrink-0" style={{ background: recordStripe(record) }} />
       )}
 
-      {/* Main link — two-row layout */}
+      {/* Main link */}
       <a
         href={href}
         target="_blank"
         rel="noopener noreferrer"
         className="flex-1 px-3 py-2 min-w-0"
       >
-        {/* Row 1: icon + event name + type (left) | competition name (right) */}
+        {/* Row 1: icon + event + type | records(mobile) or comp name(desktop) */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -264,12 +269,19 @@ function PRBadge({
               {typeLabel(pr.eventId, pr.type)}
             </span>
           </div>
-          <span className="text-xs text-gray-400 truncate text-right ml-2 min-w-0">
+          {/* Records visible on mobile in row 1 */}
+          <div className="flex sm:hidden items-center gap-1 shrink-0">
+            {pr.nr && <RankBadge label="NR" value={pr.nr} />}
+            {pr.cr && <RankBadge label="CR" value={pr.cr} />}
+            {pr.wr && <RankBadge label="WR" value={pr.wr} />}
+          </div>
+          {/* Competition name visible on desktop in row 1 */}
+          <span className="hidden sm:block text-xs text-gray-400 truncate text-right ml-2 min-w-0">
             {pr.competitionName}
           </span>
         </div>
 
-        {/* Row 2: PR time + prev (left) | NR CR WR (right) */}
+        {/* Row 2: PR time + prev | records(desktop) */}
         <div className="flex items-baseline justify-between gap-2 mt-1">
           <div className="flex items-baseline gap-1.5 min-w-0">
             <span
@@ -279,16 +291,22 @@ function PRBadge({
               {formatTime(pr.time, pr.eventId, pr.type)}
             </span>
             {prevTime !== undefined && (
-              <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
+              <span className="text-xs text-gray-400 font-mono tabular-nums shrink-0">
                 ({formatTime(prevTime, pr.eventId, pr.type)})
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          {/* Records on desktop in row 2 */}
+          <div className="hidden sm:flex items-center gap-1 shrink-0">
             {pr.nr && <RankBadge label="NR" value={pr.nr} />}
             {pr.cr && <RankBadge label="CR" value={pr.cr} />}
             {pr.wr && <RankBadge label="WR" value={pr.wr} />}
           </div>
+        </div>
+
+        {/* Row 3 (mobile only): competition name */}
+        <div className="sm:hidden text-xs text-gray-400 truncate mt-0.5">
+          {pr.competitionName}
         </div>
       </a>
 
