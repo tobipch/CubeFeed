@@ -191,10 +191,10 @@ export default function FollowingFeed() {
     }
   }
 
-  function handleLoginSuccess(loggedInUser: AuthUser) {
+  function handleLoginSuccess(loggedInUser: { id: number; username: string }) {
     setShowLoginModal(false);
     const prevFollowing = following;
-    setUser(loggedInUser);
+    setUser({ ...loggedInUser, wca_id: null, wca_name: null, wca_avatar_url: null });
     setHydrated(false);
 
     // Merge localStorage following into DB then reload
