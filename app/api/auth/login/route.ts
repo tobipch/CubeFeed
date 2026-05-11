@@ -12,12 +12,12 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Ungültige Eingabe." }, { status: 400 });
     }
 
-    const rows = await sql<{ id: number; password_hash: string }[]>`
+    const rows = await sql<{ id: number; password_hash: string | null }[]>`
       SELECT id, password_hash FROM users WHERE username = ${username.trim()}
     `;
     const user = rows[0];
 
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    if (!user || !user.password_hash || !(await bcrypt.compare(password, user.password_hash))) {
       return Response.json(
         { error: "Benutzername oder Passwort falsch." },
         { status: 401 }

@@ -219,6 +219,11 @@ async function main() {
     )
   `;
 
+  // WCA OAuth support
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_id TEXT UNIQUE`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_account_id INTEGER UNIQUE`;
+  await sql`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`;
+
   console.log("All tables created successfully.");
   await sql.end();
 }

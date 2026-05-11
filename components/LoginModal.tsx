@@ -75,6 +75,21 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
           </button>
         </div>
 
+        {/* WCA OAuth */}
+        <a
+          href="/api/auth/wca"
+          className="flex items-center justify-center gap-2 w-full border border-gray-200 hover:bg-gray-50 rounded-xl py-2 text-sm font-medium text-gray-700 transition-colors"
+        >
+          <img src="https://www.worldcubeassociation.org/files/WCAlogo_notext.svg" alt="WCA" className="w-5 h-5" />
+          Mit WCA-Account anmelden
+        </a>
+
+        <div className="flex items-center gap-3 text-xs text-gray-400">
+          <div className="flex-1 h-px bg-gray-200" />
+          oder
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
