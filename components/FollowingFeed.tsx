@@ -65,7 +65,18 @@ export default function FollowingFeed() {
       fetch("/api/user/following")
         .then((r) => r.json())
         .then((data: FollowedPerson[]) => {
-          if (Array.isArray(data)) setFollowing(data);
+          let list = Array.isArray(data) ? data : [];
+          // Auto-add self for WCA users
+          if (user.wca_id && user.wca_name && !list.some((f) => f.wcaId === user.wca_id)) {
+            const self = { wcaId: user.wca_id, name: user.wca_name };
+            list = [self, ...list];
+            fetch("/api/user/following", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(list),
+            }).catch(() => {});
+          }
+          setFollowing(list);
           setHydrated(true);
         })
         .catch(() => setHydrated(true));
@@ -169,19 +180,19 @@ export default function FollowingFeed() {
 
   const removePerson = useCallback(
     (wcaId: string) => {
+      if (user?.wca_id && wcaId === user.wca_id) return;
       setFollowing((prev) => {
         const next = prev.filter((p) => p.wcaId !== wcaId);
         saveFollowing(next);
         return next;
       });
     },
-    [saveFollowing]
+    [saveFollowing, user]
   );
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
-    // Switch back to localStorage
     try {
       const stored = JSON.parse(localStorage.getItem(FOLLOWING_KEY) ?? "[]");
       if (Array.isArray(stored)) setFollowing(stored);
@@ -202,7 +213,6 @@ export default function FollowingFeed() {
       .then((r) => r.json())
       .then((dbFollowing: FollowedPerson[]) => {
         if (!Array.isArray(dbFollowing)) return [];
-        // Merge: DB entries + any local entries not yet in DB
         const merged = [...dbFollowing];
         for (const lf of prevFollowing) {
           if (!merged.some((d) => d.wcaId === lf.wcaId)) {
@@ -238,25 +248,27 @@ export default function FollowingFeed() {
             <span className="text-3xl">🏆</span>
             <h1 className="text-3xl font-bold tracking-tight">CubeFeed</h1>
           </div>
-          <UserWidget
-            user={user}
-            onLoginClick={() => setShowLoginModal(true)}
-            onLogout={handleLogout}
-          />
+          <div className="flex items-center gap-2">
+            <FollowingDropdown
+              following={following}
+              userWcaId={user?.wca_id ?? null}
+              onAdd={addPerson}
+              onRemove={removePerson}
+            />
+            <UserWidget
+              user={user}
+              onLoginClick={() => setShowLoginModal(true)}
+              onLogout={handleLogout}
+            />
+          </div>
         </div>
         <p className="text-gray-500 text-sm">
           Never miss a great moment from your favorite cubers.
         </p>
       </header>
 
-      <FollowingManager
-        following={following}
-        onAdd={addPerson}
-        onRemove={removePerson}
-      />
-
       {following.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 mt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
           <DaysSelector current={days} options={VALID_DAYS} />
           {!loading && persons !== null && (
             <p className="text-sm text-gray-500">
@@ -312,7 +324,7 @@ function UserWidget({
           />
         )}
         <span className="text-sm text-gray-600 hidden sm:block">
-          Hallo{" "}
+          Hello{" "}
           <span className="font-semibold text-gray-800">{displayName}</span>
         </span>
         <button
@@ -325,7 +337,7 @@ function UserWidget({
             <polyline points="16 17 21 12 16 7"/>
             <line x1="21" y1="12" x2="9" y2="12"/>
           </svg>
-          Ausloggen
+          Log out
         </button>
       </div>
     );
@@ -342,33 +354,65 @@ function UserWidget({
   );
 }
 
-// ─── FollowingManager ─────────────────────────────────────────────────────────
+// ─── FollowingDropdown ────────────────────────────────────────────────────────
 
-function FollowingManager({
+function FollowingDropdown({
   following,
+  userWcaId,
   onAdd,
   onRemove,
 }: {
   following: FollowedPerson[];
+  userWcaId: string | null;
   onAdd: (person: FollowedPerson) => void;
   onRemove: (wcaId: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        !panelRef.current?.contains(e.target as Node) &&
+        !buttonRef.current?.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Close on Escape
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  // Focus search when panel opens
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+  }, [open]);
+
+  // Search with debounce
   useEffect(() => {
     if (query.length < 2) {
       setSuggestions([]);
-      setIsOpen(false);
+      setShowSuggestions(false);
       setSearchDone(false);
       return;
     }
-
     setIsSearching(true);
     setSearchDone(false);
     const timer = setTimeout(() => {
@@ -376,7 +420,7 @@ function FollowingManager({
         .then((r) => r.json())
         .then((data: SearchResult[]) => {
           setSuggestions(data);
-          setIsOpen(true);
+          setShowSuggestions(true);
           setIsSearching(false);
           setSearchDone(true);
         })
@@ -385,29 +429,14 @@ function FollowingManager({
           setSearchDone(true);
         });
     }, 300);
-
     return () => clearTimeout(timer);
   }, [query]);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (
-        !inputRef.current?.contains(target) &&
-        !dropdownRef.current?.contains(target)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   function handleSelect(result: SearchResult) {
     onAdd({ wcaId: result.wcaId, name: result.name });
     setQuery("");
     setSuggestions([]);
-    setIsOpen(false);
+    setShowSuggestions(false);
     inputRef.current?.focus();
   }
 
@@ -417,104 +446,153 @@ function FollowingManager({
       if (/^[0-9]{4}[A-Z]{4}[0-9]{2}$/.test(trimmed)) {
         onAdd({ wcaId: trimmed, name: trimmed });
         setQuery("");
-        setIsOpen(false);
+        setShowSuggestions(false);
       } else if (suggestions.length > 0) {
         handleSelect(suggestions[0]);
       }
     } else if (e.key === "Escape") {
-      setIsOpen(false);
+      if (showSuggestions) {
+        setShowSuggestions(false);
+      } else {
+        setOpen(false);
+      }
     }
   }
 
-  const showNoResults = isOpen && searchDone && !isSearching && suggestions.length === 0;
+  const label =
+    following.length === 0
+      ? "Add a cuber"
+      : `Following ${following.length} cuber${following.length !== 1 ? "s" : ""}`;
+
+  const showNoResults = showSuggestions && searchDone && !isSearching && suggestions.length === 0;
 
   return (
-    <div>
-      {following.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {following.map((f) => (
-            <span
-              key={f.wcaId}
-              className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm text-blue-800"
-            >
-              {f.name}
-              <button
-                type="button"
-                onClick={() => onRemove(f.wcaId)}
-                aria-label={`Remove ${f.name}`}
-                className="text-blue-400 hover:text-blue-700 transition-colors text-base leading-none -mr-0.5"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors bg-white"
+      >
+        <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span className="hidden sm:inline">{label}</span>
+        <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
 
-      <div className="relative inline-block w-full sm:w-80">
-        <div className="relative">
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => { if (suggestions.length > 0) setIsOpen(true); }}
-            placeholder="Add cuber (name or WCA ID)…"
-            className="w-full px-4 py-2 pr-9 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent placeholder:text-gray-400"
-          />
-          {isSearching ? (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : query ? (
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => { setQuery(""); setIsOpen(false); inputRef.current?.focus(); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
-            >
-              ×
-            </button>
-          ) : null}
-        </div>
-
-        {(isOpen || showNoResults) && (
-          <div
-            ref={dropdownRef}
-            className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden"
-          >
-            {suggestions.map((r) => {
-              const already = following.some((f) => f.wcaId === r.wcaId);
-              return (
+      {open && (
+        <div
+          ref={panelRef}
+          className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden"
+        >
+          {/* Search */}
+          <div className="p-3 border-b border-gray-100">
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Search cuber or WCA ID…"
+                className="w-full pl-8 pr-8 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent placeholder:text-gray-400"
+              />
+              {isSearching ? (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : query ? (
                 <button
-                  key={r.wcaId}
                   type="button"
-                  disabled={already}
-                  onClick={() => handleSelect(r)}
-                  className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition-colors ${
-                    already
-                      ? "opacity-40 cursor-not-allowed"
-                      : "hover:bg-blue-50 cursor-pointer"
-                  }`}
+                  tabIndex={-1}
+                  onClick={() => { setQuery(""); setShowSuggestions(false); inputRef.current?.focus(); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
                 >
-                  <span className="flex flex-col min-w-0">
-                    <span className="font-medium text-gray-900 truncate">{r.name}</span>
-                    <span className="text-xs text-gray-400 font-mono">{r.wcaId}</span>
-                  </span>
-                  <span className="text-xs text-gray-400 shrink-0 ml-3">{r.countryIso2}</span>
+                  ×
                 </button>
-              );
-            })}
-            {showNoResults && (
-              <p className="px-4 py-3 text-sm text-gray-500">
-                No results. Enter a WCA ID directly (e.g.{" "}
-                <span className="font-mono">2015MUEL01</span>) and press Enter.
-              </p>
+              ) : null}
+            </div>
+
+            {/* Search results */}
+            {(showSuggestions || showNoResults) && (
+              <div className="mt-2 border border-gray-100 rounded-xl overflow-hidden">
+                {suggestions.map((r) => {
+                  const already = following.some((f) => f.wcaId === r.wcaId);
+                  return (
+                    <button
+                      key={r.wcaId}
+                      type="button"
+                      disabled={already}
+                      onClick={() => handleSelect(r)}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors ${
+                        already ? "opacity-40 cursor-not-allowed" : "hover:bg-blue-50 cursor-pointer"
+                      }`}
+                    >
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-medium text-gray-900 truncate">{r.name}</span>
+                        <span className="text-xs text-gray-400 font-mono">{r.wcaId}</span>
+                      </span>
+                      <span className="text-xs text-gray-400 shrink-0 ml-3">{r.countryIso2}</span>
+                    </button>
+                  );
+                })}
+                {showNoResults && (
+                  <p className="px-3 py-2.5 text-sm text-gray-500">
+                    No results. Enter a WCA ID (e.g. <span className="font-mono">2015MUEL01</span>) and press Enter.
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
+
+          {/* Following list */}
+          <div className="max-h-64 overflow-y-auto">
+            {following.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-gray-400 text-center">
+                No cubers followed yet.
+              </p>
+            ) : (
+              following.map((f) => {
+                const isSelf = f.wcaId === userWcaId;
+                return (
+                  <div
+                    key={f.wcaId}
+                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{f.name}</div>
+                      <div className="text-xs font-mono text-gray-400">{f.wcaId}</div>
+                    </div>
+                    {isSelf ? (
+                      <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md font-medium shrink-0">
+                        You
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onRemove(f.wcaId)}
+                        aria-label={`Unfollow ${f.name}`}
+                        className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none shrink-0"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -529,7 +607,7 @@ function EmptyFollowingState() {
         Start your personal feed
       </h2>
       <p className="text-gray-500 text-sm max-w-sm">
-        Search for a cuber above or enter a WCA ID to follow their PRs.
+        Click <span className="font-medium text-gray-700">Add a cuber</span> in the top right to follow cubers and track their PRs.
       </p>
     </div>
   );
