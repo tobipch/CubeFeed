@@ -97,8 +97,23 @@ async function importPersons(sql: postgres.Sql, filePath: string): Promise<{ per
 }
 
 async function importResults(sql: postgres.Sql, filePath: string): Promise<void> {
-  console.log("Importing Swiss results...");
+  console.log("Importing results (Swiss + followed cubers)...");
+
+  // Load all WCA IDs from any user's following list so we can import their full history too.
+  let followedIds = new Set<string>();
+  try {
+    const rows = await sql<{ wca_id: string }[]>`SELECT DISTINCT wca_id FROM user_following`;
+    followedIds = new Set(rows.map((r) => r.wca_id));
+  } catch { /* table may not exist on first setup */ }
+
+  // Re-import Swiss results from scratch.
   await sql`DELETE FROM results WHERE person_country_id = ${COUNTRY}`;
+
+  // Re-import results for followed non-Swiss cubers (their country filter differs).
+  if (followedIds.size > 0) {
+    await sql`DELETE FROM results WHERE person_id = ANY(${sql.array([...followedIds])}::text[]) AND person_country_id != ${COUNTRY}`;
+  }
+
   const rows: {
     competition_id: string; event_id: string; round_type_id: string; pos: number; best: number; average: number;
     person_name: string; person_id: string; person_country_id: string; format_id: string;
@@ -106,19 +121,20 @@ async function importResults(sql: postgres.Sql, filePath: string): Promise<void>
   }[] = [];
   for await (const row of readTSV(filePath)) {
     const personCountryId = col(row, "person_country_id", "personCountryId");
-    if (personCountryId !== COUNTRY) continue;
+    const personId = col(row, "person_id", "personId");
+    if (personCountryId !== COUNTRY && !followedIds.has(personId)) continue;
     rows.push({
       competition_id: col(row, "competition_id", "competitionId"), event_id: col(row, "event_id", "eventId"),
       round_type_id: col(row, "round_type_id", "roundTypeId"), pos: Number(row["pos"]) || 0,
       best: Number(row["best"]) || 0, average: Number(row["average"]) || 0,
-      person_name: col(row, "person_name", "personName"), person_id: col(row, "person_id", "personId"),
+      person_name: col(row, "person_name", "personName"), person_id: personId,
       person_country_id: personCountryId, format_id: col(row, "format_id", "formatId"),
       regional_single_record: col(row, "regional_single_record", "regionalSingleRecord") || null,
       regional_average_record: col(row, "regional_average_record", "regionalAverageRecord") || null,
     });
   }
   await batchInsert(rows, async (batch) => { await sql`INSERT INTO results ${sql(batch)}`; });
-  console.log(`  Imported ${rows.length} results`);
+  console.log(`  Imported ${rows.length} results (${followedIds.size} followed non-Swiss cubers included)`);
 }
 
 async function importRanks(
