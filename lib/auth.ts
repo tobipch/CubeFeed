@@ -31,8 +31,14 @@ export async function getSessionUser(
   token: string | undefined
 ): Promise<SessionUser | null> {
   if (!token) return null;
-  const rows = await query<{ id: number; username: string }>(
-    `SELECT u.id, u.username
+  const rows = await query<{
+    id: number;
+    username: string;
+    wca_id: string | null;
+    wca_name: string | null;
+    wca_avatar_url: string | null;
+  }>(
+    `SELECT u.id, u.username, u.wca_id, u.wca_name, u.wca_avatar_url
      FROM user_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token = ? AND s.expires_at > datetime('now')`,

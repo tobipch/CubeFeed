@@ -226,12 +226,12 @@ export async function getRanksForPersons(personIds: string[]): Promise<RankMap> 
   if (personIds.length === 0) return { single: new Map(), average: new Map() };
   const placeholders = personIds.map(() => "?").join(", ");
   const [singles, averages] = await Promise.all([
-    query<{ person_id: string; event_id: string; best: number }>(
-      `SELECT person_id, event_id, best FROM ranks_single WHERE person_id IN (${placeholders})`,
+    query<{ person_id: string; event_id: string; best: number; prev_best: number | null }>(
+      `SELECT person_id, event_id, best, prev_best FROM ranks_single WHERE person_id IN (${placeholders})`,
       personIds
     ),
-    query<{ person_id: string; event_id: string; best: number }>(
-      `SELECT person_id, event_id, best FROM ranks_average WHERE person_id IN (${placeholders})`,
+    query<{ person_id: string; event_id: string; best: number; prev_best: number | null }>(
+      `SELECT person_id, event_id, best, prev_best FROM ranks_average WHERE person_id IN (${placeholders})`,
       personIds
     ),
   ]);

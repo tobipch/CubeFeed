@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { db, query } from "@/lib/db";
 import { createSession, cookieOptions, SESSION_COOKIE } from "@/lib/auth";
 
 const WCA_TOKEN_URL = "https://www.worldcubeassociation.org/oauth/token";
@@ -57,27 +57,24 @@ export async function GET(req: NextRequest) {
     const wcaAvatarUrl: string | null = me.avatar?.thumb_url ?? me.avatar?.url ?? null;
 
     let userId: number;
-    const existing = await sql<{ id: number }[]>`
-      SELECT id FROM users WHERE wca_account_id = ${wcaAccountId}
-    `;
+    const existing = await query<{ id: number }>(
+      "SELECT id FROM users WHERE wca_account_id = ?",
+      [wcaAccountId]
+    );
 
     if (existing.length > 0) {
       userId = existing[0].id;
-      await sql`
-        UPDATE users
-        SET wca_id = COALESCE(${wcaId}, wca_id),
-            wca_name = ${wcaName},
-            wca_avatar_url = ${wcaAvatarUrl}
-        WHERE id = ${userId}
-      `;
+      await db.execute({
+        sql: "UPDATE users SET wca_id = COALESCE(?, wca_id), wca_name = ?, wca_avatar_url = ? WHERE id = ?",
+        args: [wcaId, wcaName, wcaAvatarUrl, userId],
+      });
     } else {
       const username = wcaId ?? `wca_${wcaAccountId}`;
-      const inserted = await sql<{ id: number }[]>`
-        INSERT INTO users (username, password_hash, wca_id, wca_account_id, wca_name, wca_avatar_url)
-        VALUES (${username}, NULL, ${wcaId}, ${wcaAccountId}, ${wcaName}, ${wcaAvatarUrl})
-        RETURNING id
-      `;
-      userId = inserted[0].id;
+      const result = await db.execute({
+        sql: "INSERT INTO users (username, password_hash, wca_id, wca_account_id, wca_name, wca_avatar_url) VALUES (?, NULL, ?, ?, ?, ?)",
+        args: [username, wcaId, wcaAccountId, wcaName, wcaAvatarUrl],
+      });
+      userId = Number(result.lastInsertRowid);
     }
 
     const token = await createSession(userId);

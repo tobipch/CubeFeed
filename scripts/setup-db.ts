@@ -180,10 +180,14 @@ async function main() {
   // ── Auth tables ──────────────────────────────────────────────────────────────
   await exec(`
     CREATE TABLE IF NOT EXISTS users (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      username      TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at    TEXT DEFAULT (datetime('now'))
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      username        TEXT UNIQUE NOT NULL,
+      password_hash   TEXT,
+      created_at      TEXT DEFAULT (datetime('now')),
+      wca_id          TEXT UNIQUE,
+      wca_account_id  INTEGER UNIQUE,
+      wca_name        TEXT,
+      wca_avatar_url  TEXT
     )
   `);
 
@@ -207,16 +211,18 @@ async function main() {
     )
   `);
 
-  // WCA OAuth support
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_id TEXT UNIQUE`;
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_account_id INTEGER UNIQUE`;
-  await sql`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`;
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_name TEXT`;
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_avatar_url TEXT`;
+  // WCA OAuth support — tryExec ignores "duplicate column" on existing DBs
+  await tryExec("ALTER TABLE users ADD COLUMN wca_id          TEXT");
+  await tryExec("ALTER TABLE users ADD COLUMN wca_account_id  INTEGER");
+  await tryExec("ALTER TABLE users ADD COLUMN wca_name        TEXT");
+  await tryExec("ALTER TABLE users ADD COLUMN wca_avatar_url  TEXT");
+  // SQLite ADD COLUMN can't add constraints; create unique indexes separately
+  await tryExec("CREATE UNIQUE INDEX idx_users_wca_id         ON users (wca_id)");
+  await tryExec("CREATE UNIQUE INDEX idx_users_wca_account_id ON users (wca_account_id)");
 
-  // prev_best: previous personal best before the most recent PR (for live feed prevTime)
-  await sql`ALTER TABLE ranks_single  ADD COLUMN IF NOT EXISTS prev_best INTEGER`;
-  await sql`ALTER TABLE ranks_average ADD COLUMN IF NOT EXISTS prev_best INTEGER`;
+  // prev_best: previous personal best, stored when a new PR is imported
+  await tryExec("ALTER TABLE ranks_single  ADD COLUMN prev_best INTEGER");
+  await tryExec("ALTER TABLE ranks_average ADD COLUMN prev_best INTEGER");
 
   console.log("All tables created successfully.");
   db.close();
