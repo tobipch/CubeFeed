@@ -11,7 +11,6 @@
  * Optional env:
  *   WCA_EXPORT_URL – Override the default download URL
  */
-
 import "dotenv/config";
 import { createWriteStream, createReadStream } from "node:fs";
 import { fetchPRsImpl } from "../lib/queries.js";
@@ -493,7 +492,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+runWcaImport().catch((err) => {
   console.error(err);
   process.exit(1);
 });

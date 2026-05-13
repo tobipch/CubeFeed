@@ -54,7 +54,12 @@ export default function PersonCard({
       return a.time - b.time;
     });
     const current = sorted[0];
-    const prevTime = sorted.length > 1 ? sorted[1].time : current.prevTime;
+    // Only use a displaced entry as prevTime if it's from a different competition;
+    // same-competition entries are just duplicate rounds with the same best time.
+    const prevTime =
+      sorted.length > 1 && sorted[1].competitionId !== sorted[0].competitionId
+        ? sorted[1].time
+        : current.prevTime;
     dedupedPRs.push({ pr: current, prevTime });
   }
 
@@ -239,14 +244,14 @@ function PRBadge({
         <div className="w-[4px] self-stretch shrink-0" style={{ background: recordStripe(record) }} />
       )}
 
-      {/* Main link — two-row layout */}
+      {/* Main link */}
       <a
         href={href}
         target="_blank"
         rel="noopener noreferrer"
         className="flex-1 px-3 py-2 min-w-0"
       >
-        {/* Row 1: icon + event name + type (left) | competition name (right) */}
+        {/* Row 1: icon + event + type (left) | competition name (right, truncated) */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -269,22 +274,22 @@ function PRBadge({
           </span>
         </div>
 
-        {/* Row 2: PR time + prev (left) | NR CR WR (right) */}
-        <div className="flex items-baseline justify-between gap-2 mt-1">
-          <div className="flex items-baseline gap-1.5 min-w-0">
+        {/* Row 2: time + prev (left) | records (right, wraps to next line if no room) */}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1">
+          <div className="flex items-baseline gap-1.5 shrink-0">
             <span
-              className="text-base font-bold text-gray-900 tabular-nums shrink-0"
+              className="text-base font-bold text-gray-900 tabular-nums"
               style={{ fontFamily: "var(--font-dm-mono)" }}
             >
               {formatTime(pr.time, pr.eventId, pr.type)}
             </span>
-            <span className="text-xs text-gray-400 font-mono tabular-nums truncate">
-              ({prevTime !== undefined
-                ? formatTime(prevTime, pr.eventId, pr.type)
-                : "no previous result"})
-            </span>
+            {prevTime !== undefined && (
+              <span className="text-xs text-gray-400 font-mono tabular-nums">
+                ({formatTime(prevTime, pr.eventId, pr.type)})
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 ml-auto shrink-0">
             {pr.nr && <RankBadge label="NR" value={pr.nr} />}
             {pr.cr && <RankBadge label="CR" value={pr.cr} />}
             {pr.wr && <RankBadge label="WR" value={pr.wr} />}

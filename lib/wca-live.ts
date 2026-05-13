@@ -390,7 +390,13 @@ async function processCompetitionForPersons(
         // Use WCA Live's own record tag as the authoritative PR indicator.
         // This avoids showing non-PR results when the person has no DB entry.
         if (entry.best > 0 && entry.singleRecord) {
-          const dbBest = ranks.single.get(`${wcaId}:${entry.eventId}`);
+          const key = `${wcaId}:${entry.eventId}`;
+          const dbBest = ranks.single.get(key);
+          // If dbBest > entry.best: rank not yet updated → use as prev.
+          // If dbBest === entry.best: import already ran → fall back to prev_best column.
+          const prevTime = dbBest && dbBest > entry.best
+            ? dbBest
+            : (ranks.prevSingle?.get(key) ?? undefined);
           addLivePR(personMap, wcaId, person.name, {
             eventId: entry.eventId,
             competitionId: wcaCompId,
@@ -405,12 +411,16 @@ async function processCompetitionForPersons(
             regionalRecord: entry.singleRecord !== "PR" ? entry.singleRecord : null,
             isLive: true,
             liveUrl,
-            prevTime: dbBest ?? undefined,
+            prevTime,
           });
         }
 
         if (entry.average > 0 && entry.averageRecord) {
-          const dbAvgBest = ranks.average.get(`${wcaId}:${entry.eventId}`);
+          const key = `${wcaId}:${entry.eventId}`;
+          const dbAvgBest = ranks.average.get(key);
+          const prevTime = dbAvgBest && dbAvgBest > entry.average
+            ? dbAvgBest
+            : (ranks.prevAverage?.get(key) ?? undefined);
           addLivePR(personMap, wcaId, person.name, {
             eventId: entry.eventId,
             competitionId: wcaCompId,
@@ -425,7 +435,7 @@ async function processCompetitionForPersons(
             regionalRecord: entry.averageRecord !== "PR" ? entry.averageRecord : null,
             isLive: true,
             liveUrl,
-            prevTime: dbAvgBest ?? undefined,
+            prevTime,
           });
         }
       }
@@ -488,6 +498,9 @@ async function processCompetition(
           const key = `${wcaId}:${entry.eventId}`;
           const dbBest = ranks.single.get(key);
           if (!dbBest || entry.best <= dbBest) {
+            const prevTime = dbBest && dbBest > entry.best
+              ? dbBest
+              : (ranks.prevSingle?.get(key) ?? undefined);
             addLivePR(personMap, wcaId, person.name, {
               eventId: entry.eventId,
               competitionId: wcaCompId,
@@ -502,7 +515,7 @@ async function processCompetition(
               regionalRecord: entry.singleRecord !== "PR" ? entry.singleRecord : null,
               isLive: true,
               liveUrl,
-              prevTime: dbBest ?? undefined,
+              prevTime,
             });
           }
         }
@@ -512,6 +525,9 @@ async function processCompetition(
           const key = `${wcaId}:${entry.eventId}`;
           const dbAvgBest = ranks.average.get(key);
           if (!dbAvgBest || entry.average <= dbAvgBest) {
+            const prevTime = dbAvgBest && dbAvgBest > entry.average
+              ? dbAvgBest
+              : (ranks.prevAverage?.get(key) ?? undefined);
             addLivePR(personMap, wcaId, person.name, {
               eventId: entry.eventId,
               competitionId: wcaCompId,
@@ -526,7 +542,7 @@ async function processCompetition(
               regionalRecord: entry.averageRecord !== "PR" ? entry.averageRecord : null,
               isLive: true,
               liveUrl,
-              prevTime: dbAvgBest ?? undefined,
+              prevTime,
             });
           }
         }

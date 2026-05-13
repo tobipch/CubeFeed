@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     );
     const user = rows[0];
 
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    if (!user || !user.password_hash || !(await bcrypt.compare(password, user.password_hash))) {
       return Response.json(
         { error: "Benutzername oder Passwort falsch." },
         { status: 401 }

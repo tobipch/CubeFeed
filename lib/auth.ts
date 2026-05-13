@@ -8,6 +8,9 @@ const SESSION_DURATION_DAYS = 30;
 export interface SessionUser {
   id: number;
   username: string;
+  wca_id: string | null;
+  wca_name: string | null;
+  wca_avatar_url: string | null;
 }
 
 /** Create a new session token, persist it, and return it. */

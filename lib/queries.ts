@@ -135,8 +135,10 @@ export async function getImportDate(): Promise<string | null> {
 }
 
 export interface RankMap {
-  single: Map<string, number>;   // "personId:eventId" → best
+  single: Map<string, number>;      // "personId:eventId" → current best
   average: Map<string, number>;
+  prevSingle?: Map<string, number>; // "personId:eventId" → previous best (before last PR)
+  prevAverage?: Map<string, number>;
 }
 
 export async function getAllSwissRanks(): Promise<RankMap> {
@@ -235,9 +237,17 @@ export async function getRanksForPersons(personIds: string[]): Promise<RankMap> 
   ]);
   const single = new Map<string, number>();
   const average = new Map<string, number>();
-  for (const r of singles) single.set(`${r.person_id}:${r.event_id}`, r.best);
-  for (const r of averages) average.set(`${r.person_id}:${r.event_id}`, r.best);
-  return { single, average };
+  const prevSingle = new Map<string, number>();
+  const prevAverage = new Map<string, number>();
+  for (const r of singles) {
+    single.set(`${r.person_id}:${r.event_id}`, r.best);
+    if (r.prev_best) prevSingle.set(`${r.person_id}:${r.event_id}`, r.prev_best);
+  }
+  for (const r of averages) {
+    average.set(`${r.person_id}:${r.event_id}`, r.best);
+    if (r.prev_best) prevAverage.set(`${r.person_id}:${r.event_id}`, r.prev_best);
+  }
+  return { single, average, prevSingle, prevAverage };
 }
 
 export async function getDbCompetitionIds(): Promise<Set<string>> {
