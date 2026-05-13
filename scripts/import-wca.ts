@@ -202,8 +202,19 @@ async function importPersons(
 }
 
 async function importResults(filePath: string): Promise<void> {
-  console.log("Importing all results (worldwide)...");
-  await db.execute("DELETE FROM results");
+  // Load competition IDs already in the DB so we can skip them.
+  // WCA results are final after a competition closes, so skipping known
+  // competitions is safe and makes subsequent imports orders of magnitude faster.
+  const existingRes = await db.execute(
+    "SELECT DISTINCT competition_id FROM results"
+  );
+  const existingCompIds = new Set(existingRes.rows.map((r) => r[0] as string));
+  const isIncremental = existingCompIds.size > 0;
+  console.log(
+    isIncremental
+      ? `Importing results — skipping ${existingCompIds.size} already-imported competitions...`
+      : "Importing all results (first run, full import)..."
+  );
 
   const columns = [
     "competition_id", "event_id", "round_type_id", "pos", "best", "average",
@@ -211,11 +222,15 @@ async function importResults(filePath: string): Promise<void> {
     "regional_single_record", "regional_average_record",
   ];
   const rows: SqlValue[][] = [];
+  const newCompIds = new Set<string>();
 
   for await (const row of readTSV(filePath)) {
+    const competitionId = col(row, "competition_id", "competitionId");
+    if (existingCompIds.has(competitionId)) continue; // already imported
+    newCompIds.add(competitionId);
     const personCountryId = col(row, "person_country_id", "personCountryId");
     rows.push([
-      col(row, "competition_id",          "competitionId"),
+      competitionId,
       col(row, "event_id",                "eventId"),
       col(row, "round_type_id",           "roundTypeId"),
       Number(row["pos"]) || 0,
@@ -231,7 +246,9 @@ async function importResults(filePath: string): Promise<void> {
   }
 
   await bulkInsert("results", columns, rows);
-  console.log(`  Imported ${rows.length} results (all countries)`);
+  console.log(
+    `  Imported ${rows.length} results from ${newCompIds.size} new competitions`
+  );
 }
 
 async function importRanks(
