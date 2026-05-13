@@ -287,9 +287,9 @@ function PRBadge({
             )}
           </div>
           <div className="flex items-center gap-1 ml-auto shrink-0">
-            {pr.nr && <RankBadge label="NR" value={pr.nr} />}
-            {pr.cr && <RankBadge label="CR" value={pr.cr} />}
-            {pr.wr && <RankBadge label="WR" value={pr.wr} />}
+            {(pr.nr ?? 0) > 0 && <RankBadge label="NR" value={pr.nr!} />}
+            {(pr.cr ?? 0) > 0 && <RankBadge label="CR" value={pr.cr!} />}
+            {(pr.wr ?? 0) > 0 && <RankBadge label="WR" value={pr.wr!} />}
           </div>
         </div>
       </a>

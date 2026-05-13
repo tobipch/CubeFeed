@@ -12,7 +12,7 @@
  * gracefully when WCA Live is unavailable.
  */
 
-import { getVirtualRankings, getVirtualNRs, getPersonCountries, getRanksForPersons } from "./queries";
+import { getVirtualRankings, getVirtualNRs, getPersonCountries, getRanksForPersons, getPrevBestsFromResults } from "./queries";
 import type { PersonPRs, PR, RankMap } from "./queries";
 
 const WCA_LIVE_API = "https://live.worldcubeassociation.org/api";
@@ -276,6 +276,24 @@ export async function fetchLivePRs(
     }
   }
 
+  // Fallback: PRs still missing prevTime (e.g. prev_best NULL after first import)
+  const missingPrevTime = Array.from(personMap.entries()).flatMap(([wcaId, p]) =>
+    p.prs
+      .filter((pr) => pr.prevTime === undefined)
+      .map((pr) => ({ personId: wcaId, eventId: pr.eventId, currentBest: pr.time, type: pr.type }))
+  );
+  if (missingPrevTime.length > 0) {
+    const prevBests = await getPrevBestsFromResults(missingPrevTime).catch(() => new Map<string, number>());
+    for (const [wcaId, p] of personMap.entries()) {
+      for (const pr of p.prs) {
+        if (pr.prevTime === undefined) {
+          const prev = prevBests.get(`${wcaId}:${pr.eventId}:${pr.type}`);
+          if (prev) pr.prevTime = prev;
+        }
+      }
+    }
+  }
+
   return Array.from(personMap.values()).filter((p) => p.prs.length > 0);
 }
 
@@ -335,6 +353,15 @@ export async function fetchLivePRsForPersons(
     ),
   ]);
 
+  // Collect PRs that still have no prevTime — happens when ranks.prevSingle
+  // is NULL (first import never fires ON CONFLICT). Fall back to results table.
+  const missingPrevTime = Array.from(personMap.entries()).flatMap(([wcaId, p]) =>
+    p.prs
+      .filter((pr) => pr.prevTime === undefined)
+      .map((pr) => ({ personId: wcaId, eventId: pr.eventId, currentBest: pr.time, type: pr.type }))
+  );
+  const prevBests = await getPrevBestsFromResults(missingPrevTime).catch(() => new Map<string, number>());
+
   for (const [wcaId, p] of personMap.entries()) {
     const countryId = personCountries.get(wcaId);
     for (const pr of p.prs) {
@@ -343,6 +370,10 @@ export async function fetchLivePRsForPersons(
       if (countryId) {
         const nr = nrs.get(`${pr.eventId}:${pr.type}:${pr.time}:${countryId}`);
         if (nr != null) pr.nr = nr;
+      }
+      if (pr.prevTime === undefined) {
+        const prev = prevBests.get(`${wcaId}:${pr.eventId}:${pr.type}`);
+        if (prev) pr.prevTime = prev;
       }
     }
   }

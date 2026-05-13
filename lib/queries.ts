@@ -383,6 +383,33 @@ export async function getVirtualRankings(
   return result;
 }
 
+/**
+ * For each (personId, eventId) pair, returns the second-best time from the
+ * results table (i.e. the best time excluding their all-time best).
+ * Used as a prevTime fallback when ranks_single.prev_best is NULL.
+ */
+export async function getPrevBestsFromResults(
+  pairs: Array<{ personId: string; eventId: string; currentBest: number; type: "single" | "average" }>
+): Promise<Map<string, number>> {
+  if (pairs.length === 0) return new Map();
+  const result = new Map<string, number>();
+  for (const { personId, eventId, currentBest, type } of pairs) {
+    const col = type === "single" ? "best" : "average";
+    try {
+      const rows = await query<{ prev: number }>(
+        `SELECT MIN(${col}) AS prev FROM results
+         WHERE person_id = ? AND event_id = ? AND ${col} > ? AND ${col} > 0`,
+        [personId, eventId, currentBest]
+      );
+      const prev = rows[0]?.prev;
+      if (prev) result.set(`${personId}:${eventId}:${type}`, prev);
+    } catch {
+      // ignore
+    }
+  }
+  return result;
+}
+
 export async function getPersonCountries(personIds: string[]): Promise<Map<string, string>> {
   if (personIds.length === 0) return new Map();
   const placeholders = personIds.map(() => "?").join(", ");
