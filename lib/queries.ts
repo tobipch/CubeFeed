@@ -108,8 +108,7 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
     LEFT JOIN ranks_average ra
            ON r.person_id = ra.person_id AND r.event_id = ra.event_id
     WHERE
-      r.person_country_id = 'Switzerland'
-      AND c.end_date >= ?
+      c.end_date >= ?
       AND c.end_date <= ?
       AND (
         (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
@@ -139,22 +138,6 @@ export interface RankMap {
   average: Map<string, number>;
   prevSingle?: Map<string, number>; // "personId:eventId" → previous best (before last PR)
   prevAverage?: Map<string, number>;
-}
-
-export async function getAllSwissRanks(): Promise<RankMap> {
-  const [singles, averages] = await Promise.all([
-    query<{ person_id: string; event_id: string; best: number }>(
-      "SELECT person_id, event_id, best FROM ranks_single"
-    ),
-    query<{ person_id: string; event_id: string; best: number }>(
-      "SELECT person_id, event_id, best FROM ranks_average"
-    ),
-  ]);
-  const single = new Map<string, number>();
-  const average = new Map<string, number>();
-  for (const r of singles) single.set(`${r.person_id}:${r.event_id}`, r.best);
-  for (const r of averages) average.set(`${r.person_id}:${r.event_id}`, r.best);
-  return { single, average };
 }
 
 export async function fetchPRsForPersons(personIds: string[], days: number): Promise<PersonPRs[]> {
