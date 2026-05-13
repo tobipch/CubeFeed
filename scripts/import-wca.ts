@@ -202,11 +202,8 @@ async function importPersons(
 }
 
 async function importResults(filePath: string): Promise<void> {
-  console.log("Importing Swiss results...");
-  await db.execute({
-    sql: "DELETE FROM results WHERE person_country_id = ?",
-    args: [COUNTRY],
-  });
+  console.log("Importing all results (worldwide)...");
+  await db.execute("DELETE FROM results");
 
   const columns = [
     "competition_id", "event_id", "round_type_id", "pos", "best", "average",
@@ -217,7 +214,6 @@ async function importResults(filePath: string): Promise<void> {
 
   for await (const row of readTSV(filePath)) {
     const personCountryId = col(row, "person_country_id", "personCountryId");
-    if (personCountryId !== COUNTRY) continue;
     rows.push([
       col(row, "competition_id",          "competitionId"),
       col(row, "event_id",                "eventId"),
@@ -235,7 +231,7 @@ async function importResults(filePath: string): Promise<void> {
   }
 
   await bulkInsert("results", columns, rows);
-  console.log(`  Imported ${rows.length} results`);
+  console.log(`  Imported ${rows.length} results (all countries)`);
 }
 
 async function importRanks(
