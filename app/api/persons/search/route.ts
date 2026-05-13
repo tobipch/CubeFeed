@@ -1,19 +1,25 @@
 import { type NextRequest } from "next/server";
-import { sql } from "@/lib/db";
+import { query } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
-  const query = new URL(req.url).searchParams.get("q") ?? "";
-  if (query.length < 2) return Response.json([]);
+  const q = new URL(req.url).searchParams.get("q") ?? "";
+  if (q.length < 2) return Response.json([]);
 
-  const pattern = `%${query}%`;
-  const rows = await sql<{ wca_id: string; name: string; country_id: string }[]>`
-    SELECT DISTINCT ON (wca_id) wca_id, name, country_id
-    FROM persons
-    WHERE name ILIKE ${pattern}
-       OR wca_id ILIKE ${pattern}
-    ORDER BY wca_id, sub_id
-    LIMIT 20
-  `.catch(() => []);
+  const pattern = `%${q}%`;
+  // SQLite doesn't support DISTINCT ON — use ROW_NUMBER() window function instead
+  const rows = await query<{ wca_id: string; name: string; country_id: string }>(
+    `SELECT wca_id, name, country_id
+     FROM (
+       SELECT wca_id, name, country_id,
+         ROW_NUMBER() OVER (PARTITION BY wca_id ORDER BY sub_id) AS rn
+       FROM persons
+       WHERE name LIKE ? OR wca_id LIKE ?
+     )
+     WHERE rn = 1
+     ORDER BY wca_id
+     LIMIT 20`,
+    [pattern, pattern]
+  ).catch(() => []);
 
   return Response.json(
     rows.map((r) => ({

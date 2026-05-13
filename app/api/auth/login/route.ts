@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
+import { query } from "@/lib/db";
 import { createSession, cookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import { cookies } from "next/headers";
 
@@ -12,9 +12,10 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Ungültige Eingabe." }, { status: 400 });
     }
 
-    const rows = await sql<{ id: number; password_hash: string }[]>`
-      SELECT id, password_hash FROM users WHERE username = ${username.trim()}
-    `;
+    const rows = await query<{ id: number; password_hash: string }>(
+      "SELECT id, password_hash FROM users WHERE username = ?",
+      [username.trim()]
+    );
     const user = rows[0];
 
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = await createSession(user.id);
+    const token = await createSession(Number(user.id));
     const jar = await cookies();
     jar.set(SESSION_COOKIE, token, cookieOptions(30 * 24 * 60 * 60));
 

@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
-import { sql } from "@/lib/db";
+import { db, query } from "@/lib/db";
 
 interface FollowedPerson {
   wcaId: string;
@@ -11,11 +11,10 @@ export async function GET() {
     const user = await getCurrentUser();
     if (!user) return Response.json({ error: "Nicht eingeloggt." }, { status: 401 });
 
-    const rows = await sql<{ wca_id: string; name: string }[]>`
-      SELECT wca_id, name FROM user_following
-      WHERE user_id = ${user.id}
-      ORDER BY added_at ASC
-    `;
+    const rows = await query<{ wca_id: string; name: string }>(
+      "SELECT wca_id, name FROM user_following WHERE user_id = ? ORDER BY added_at ASC",
+      [user.id]
+    );
     return Response.json(rows.map((r) => ({ wcaId: r.wca_id, name: r.name })));
   } catch {
     return Response.json({ error: "Interner Fehler." }, { status: 500 });
@@ -33,21 +32,25 @@ export async function PUT(req: Request) {
     }
     const persons = body as FollowedPerson[];
 
-    // Replace the user's following list inside a transaction
-    await sql.begin(async (tx) => {
-      await tx`DELETE FROM user_following WHERE user_id = ${user.id}`;
-      if (persons.length > 0) {
-        const values = persons.map((p) => ({
-          user_id: user.id,
-          wca_id: p.wcaId,
-          name: p.name,
-        }));
-        await tx`
-          INSERT INTO user_following ${tx(values, "user_id", "wca_id", "name")}
-          ON CONFLICT (user_id, wca_id) DO UPDATE SET name = EXCLUDED.name
-        `;
+    const tx = await db.transaction("write");
+    try {
+      await tx.execute({
+        sql: "DELETE FROM user_following WHERE user_id = ?",
+        args: [user.id],
+      });
+      for (const p of persons) {
+        await tx.execute({
+          sql: `INSERT INTO user_following (user_id, wca_id, name)
+                VALUES (?, ?, ?)
+                ON CONFLICT (user_id, wca_id) DO UPDATE SET name = EXCLUDED.name`,
+          args: [user.id, p.wcaId, p.name],
+        });
       }
-    });
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
 
     return Response.json({ ok: true });
   } catch {

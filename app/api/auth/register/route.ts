@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
+import { db, query } from "@/lib/db";
 import { createSession, cookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import { cookies } from "next/headers";
 
@@ -21,9 +21,10 @@ export async function POST(req: NextRequest) {
     }
 
     const trimmedUsername = username.trim();
-    const existing = await sql`
-      SELECT id FROM users WHERE username = ${trimmedUsername}
-    `;
+    const existing = await query(
+      "SELECT id FROM users WHERE username = ?",
+      [trimmedUsername]
+    );
     if (existing.length > 0) {
       return Response.json(
         { error: "Benutzername bereits vergeben." },
@@ -32,12 +33,11 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const inserted = await sql<{ id: number }[]>`
-      INSERT INTO users (username, password_hash)
-      VALUES (${trimmedUsername}, ${passwordHash})
-      RETURNING id
-    `;
-    const userId = inserted[0].id;
+    const result = await db.execute({
+      sql: "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+      args: [trimmedUsername, passwordHash],
+    });
+    const userId = Number(result.lastInsertRowid);
     const token = await createSession(userId);
 
     const jar = await cookies();
