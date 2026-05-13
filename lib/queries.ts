@@ -126,8 +126,10 @@ export async function getImportDate(): Promise<string | null> {
 }
 
 export interface RankMap {
-  single: Map<string, number>;   // "personId:eventId" → best
+  single: Map<string, number>;      // "personId:eventId" → current best
   average: Map<string, number>;
+  prevSingle?: Map<string, number>; // "personId:eventId" → previous best (before last PR)
+  prevAverage?: Map<string, number>;
 }
 
 export async function getAllSwissRanks(): Promise<RankMap> {
@@ -202,22 +204,30 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
 }
 
 export async function getRanksForPersons(personIds: string[]): Promise<RankMap> {
-  if (personIds.length === 0) return { single: new Map(), average: new Map() };
+  if (personIds.length === 0) return { single: new Map(), average: new Map(), prevSingle: new Map(), prevAverage: new Map() };
   const [singles, averages] = await Promise.all([
-    sql<{ person_id: string; event_id: string; best: number }[]>`
-      SELECT person_id, event_id, best FROM ranks_single
+    sql<{ person_id: string; event_id: string; best: number; prev_best: number | null }[]>`
+      SELECT person_id, event_id, best, prev_best FROM ranks_single
       WHERE person_id = ANY(${sql.array(personIds)}::text[])
     `,
-    sql<{ person_id: string; event_id: string; best: number }[]>`
-      SELECT person_id, event_id, best FROM ranks_average
+    sql<{ person_id: string; event_id: string; best: number; prev_best: number | null }[]>`
+      SELECT person_id, event_id, best, prev_best FROM ranks_average
       WHERE person_id = ANY(${sql.array(personIds)}::text[])
     `,
   ]);
   const single = new Map<string, number>();
   const average = new Map<string, number>();
-  for (const r of singles) single.set(`${r.person_id}:${r.event_id}`, r.best);
-  for (const r of averages) average.set(`${r.person_id}:${r.event_id}`, r.best);
-  return { single, average };
+  const prevSingle = new Map<string, number>();
+  const prevAverage = new Map<string, number>();
+  for (const r of singles) {
+    single.set(`${r.person_id}:${r.event_id}`, r.best);
+    if (r.prev_best) prevSingle.set(`${r.person_id}:${r.event_id}`, r.prev_best);
+  }
+  for (const r of averages) {
+    average.set(`${r.person_id}:${r.event_id}`, r.best);
+    if (r.prev_best) prevAverage.set(`${r.person_id}:${r.event_id}`, r.prev_best);
+  }
+  return { single, average, prevSingle, prevAverage };
 }
 
 export async function getDbCompetitionIds(): Promise<Set<string>> {

@@ -219,6 +219,17 @@ async function main() {
     )
   `;
 
+  // WCA OAuth support
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_id TEXT UNIQUE`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_account_id INTEGER UNIQUE`;
+  await sql`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_name TEXT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS wca_avatar_url TEXT`;
+
+  // prev_best: previous personal best before the most recent PR (for live feed prevTime)
+  await sql`ALTER TABLE ranks_single  ADD COLUMN IF NOT EXISTS prev_best INTEGER`;
+  await sql`ALTER TABLE ranks_average ADD COLUMN IF NOT EXISTS prev_best INTEGER`;
+
   console.log("All tables created successfully.");
   await sql.end();
 }
