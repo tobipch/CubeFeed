@@ -6,7 +6,7 @@ import readline from "node:readline";
 import { pipeline } from "node:stream/promises";
 import AdmZip from "adm-zip";
 import { createClient, type Client } from "@libsql/client";
-import { fetchPRsImpl } from "./queries.js";
+import { fetchPRsImpl } from "./queries";
 
 const WCA_EXPORT_URL =
   process.env.WCA_EXPORT_URL ??
