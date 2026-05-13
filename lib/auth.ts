@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { sql } from "./db";
+import { db, query } from "./db";
 import crypto from "crypto";
 
 export const SESSION_COOKIE = "wca_session";
@@ -18,11 +18,11 @@ export async function createSession(userId: number): Promise<string> {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(
     Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
-  );
-  await sql`
-    INSERT INTO user_sessions (token, user_id, expires_at)
-    VALUES (${token}, ${userId}, ${expiresAt})
-  `;
+  ).toISOString();
+  await db.execute({
+    sql: "INSERT INTO user_sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+    args: [token, userId, expiresAt],
+  });
   return token;
 }
 
@@ -31,19 +31,25 @@ export async function getSessionUser(
   token: string | undefined
 ): Promise<SessionUser | null> {
   if (!token) return null;
-  const rows = await sql<{ id: number; username: string; wca_id: string | null; wca_name: string | null; wca_avatar_url: string | null }[]>`
-    SELECT u.id, u.username, u.wca_id, u.wca_name, u.wca_avatar_url
-    FROM user_sessions s
-    JOIN users u ON u.id = s.user_id
-    WHERE s.token = ${token}
-      AND s.expires_at > NOW()
-  `;
+  const rows = await query<{
+    id: number;
+    username: string;
+    wca_id: string | null;
+    wca_name: string | null;
+    wca_avatar_url: string | null;
+  }>(
+    `SELECT u.id, u.username, u.wca_id, u.wca_name, u.wca_avatar_url
+     FROM user_sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.token = ? AND s.expires_at > datetime('now')`,
+    [token]
+  );
   return rows[0] ?? null;
 }
 
 /** Delete a session from the DB. */
 export async function deleteSession(token: string): Promise<void> {
-  await sql`DELETE FROM user_sessions WHERE token = ${token}`;
+  await db.execute({ sql: "DELETE FROM user_sessions WHERE token = ?", args: [token] });
 }
 
 /** Read the current session user from the incoming request cookie. */

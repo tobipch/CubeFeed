@@ -5,15 +5,16 @@ import { tmpdir } from "node:os";
 import readline from "node:readline";
 import { pipeline } from "node:stream/promises";
 import AdmZip from "adm-zip";
-import postgres from "postgres";
-import { fetchPRsImpl } from "./queries";
+import { createClient, type Client } from "@libsql/client";
+import { fetchPRsImpl } from "./queries.js";
 
 const WCA_EXPORT_URL =
   process.env.WCA_EXPORT_URL ??
   "https://www.worldcubeassociation.org/export/results/v2/tsv";
 
-const COUNTRY = "Switzerland";
-const BATCH_SIZE = 500;
+const INSERT_BATCH = 100;
+
+type SqlValue = string | number | null;
 
 async function download(url: string, dest: string): Promise<void> {
   console.log(`Downloading ${url} ...`);
@@ -38,13 +39,33 @@ async function* readTSV(filePath: string): AsyncGenerator<Record<string, string>
   }
 }
 
-async function batchInsert<T>(items: T[], insertFn: (batch: T[]) => Promise<void>): Promise<void> {
-  for (let i = 0; i < items.length; i += BATCH_SIZE) await insertFn(items.slice(i, i + BATCH_SIZE));
+async function bulkInsert(
+  db: Client,
+  table: string,
+  columns: string[],
+  rows: SqlValue[][],
+  onConflict = ""
+): Promise<void> {
+  if (rows.length === 0) return;
+  const colList = columns.join(", ");
+  const rowPlaceholder = `(${columns.map(() => "?").join(", ")})`;
+  for (let i = 0; i < rows.length; i += INSERT_BATCH) {
+    const chunk = rows.slice(i, i + INSERT_BATCH);
+    await db.execute({
+      sql: `INSERT INTO ${table} (${colList}) VALUES ${chunk.map(() => rowPlaceholder).join(", ")} ${onConflict}`,
+      args: chunk.flat(),
+    });
+  }
 }
 
 function deduplicateBy<T>(items: T[], keyFn: (item: T) => string): T[] {
   const seen = new Set<string>();
-  return items.filter((item) => { const key = keyFn(item); if (seen.has(key)) return false; seen.add(key); return true; });
+  return items.filter((item) => {
+    const k = keyFn(item);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 function col(row: Record<string, string>, snake: string, camel?: string): string {
@@ -57,117 +78,128 @@ function buildDate(year: string, month: string, day: string): string | null {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-async function importCompetitions(sql: postgres.Sql, filePath: string): Promise<void> {
+async function importCompetitions(db: Client, filePath: string): Promise<void> {
   console.log("Importing competitions...");
-  await sql`TRUNCATE competitions CASCADE`;
-  const rows: { id: string; name: string; city_name: string; country_id: string; start_date: string | null; end_date: string | null }[] = [];
+  await db.execute("DELETE FROM competitions");
+  const columns = ["id", "name", "city_name", "country_id", "start_date", "end_date"];
+  const rows: SqlValue[][] = [];
   for await (const row of readTSV(filePath)) {
-    rows.push({
-      id: row["id"], name: row["name"],
-      city_name: col(row, "city_name", "cityName"),
-      country_id: col(row, "country_id", "countryId"),
-      start_date: buildDate(row["year"], row["month"], row["day"]),
-      end_date: buildDate(row["end_year"], row["end_month"], row["end_day"]),
-    });
+    rows.push([
+      row["id"], row["name"],
+      col(row, "city_name", "cityName"),
+      col(row, "country_id", "countryId"),
+      buildDate(row["year"], row["month"], row["day"]),
+      buildDate(row["end_year"], row["end_month"], row["end_day"]),
+    ]);
   }
-  await batchInsert(rows, async (batch) => {
-    await sql`INSERT INTO competitions ${sql(batch)} ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, city_name=EXCLUDED.city_name, country_id=EXCLUDED.country_id, start_date=EXCLUDED.start_date, end_date=EXCLUDED.end_date`;
-  });
+  await bulkInsert(db, "competitions", columns, rows,
+    `ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, city_name=EXCLUDED.city_name, country_id=EXCLUDED.country_id, start_date=EXCLUDED.start_date, end_date=EXCLUDED.end_date`);
   console.log(`  Imported ${rows.length} competitions`);
 }
 
-async function importPersons(sql: postgres.Sql, filePath: string): Promise<{ personCountryMap: Map<string, string> }> {
+async function importPersons(
+  db: Client,
+  filePath: string
+): Promise<{ personCountryMap: Map<string, string> }> {
   console.log("Importing all persons (worldwide)...");
-  await sql`TRUNCATE persons`;
+  await db.execute("DELETE FROM persons");
   const personCountryMap = new Map<string, string>();
-  const rows: { wca_id: string; sub_id: number; name: string; country_id: string }[] = [];
+  const allRows: { key: string; values: SqlValue[] }[] = [];
   for await (const row of readTSV(filePath)) {
     const countryId = col(row, "country_id", "countryId");
     const id = row["id"] ?? row["wca_id"] ?? "";
     if (!id) continue;
     if (countryId) personCountryMap.set(id, countryId);
-    rows.push({ wca_id: id, sub_id: Number(row["subid"]) || 0, name: row["name"], country_id: countryId });
+    const subId = Number(row["subid"]) || 0;
+    allRows.push({ key: `${id}:${subId}`, values: [id, subId, row["name"], countryId] });
   }
-  const deduped = deduplicateBy(rows, (r) => `${r.wca_id}:${r.sub_id}`);
-  await batchInsert(deduped, async (batch) => {
-    await sql`INSERT INTO persons ${sql(batch)} ON CONFLICT (wca_id, sub_id) DO UPDATE SET name=EXCLUDED.name, country_id=EXCLUDED.country_id`;
-  });
+  const deduped = deduplicateBy(allRows, (r) => r.key).map((r) => r.values);
+  await bulkInsert(db, "persons", ["wca_id", "sub_id", "name", "country_id"], deduped,
+    `ON CONFLICT (wca_id, sub_id) DO UPDATE SET name=EXCLUDED.name, country_id=EXCLUDED.country_id`);
   console.log(`  Imported ${deduped.length} persons`);
   return { personCountryMap };
 }
 
-async function importResults(sql: postgres.Sql, filePath: string): Promise<void> {
-  console.log("Importing results (Swiss + followed cubers)...");
-
-  // Load all WCA IDs from any user's following list so we can import their full history too.
-  let followedIds = new Set<string>();
-  try {
-    const rows = await sql<{ wca_id: string }[]>`SELECT DISTINCT wca_id FROM user_following`;
-    followedIds = new Set(rows.map((r) => r.wca_id));
-  } catch { /* table may not exist on first setup */ }
-
-  // Re-import Swiss results from scratch.
-  await sql`DELETE FROM results WHERE person_country_id = ${COUNTRY}`;
-
-  // Re-import results for followed non-Swiss cubers (their country filter differs).
-  if (followedIds.size > 0) {
-    await sql`DELETE FROM results WHERE person_id = ANY(${sql.array([...followedIds])}::text[]) AND person_country_id != ${COUNTRY}`;
-  }
-
-  const rows: {
-    competition_id: string; event_id: string; round_type_id: string; pos: number; best: number; average: number;
-    person_name: string; person_id: string; person_country_id: string; format_id: string;
-    regional_single_record: string | null; regional_average_record: string | null;
-  }[] = [];
+async function importResults(db: Client, filePath: string): Promise<void> {
+  const existingRes = await db.execute("SELECT DISTINCT competition_id FROM results");
+  const existingCompIds = new Set(existingRes.rows.map((r) => r[0] as string));
+  const isIncremental = existingCompIds.size > 0;
+  console.log(
+    isIncremental
+      ? `Importing results — skipping ${existingCompIds.size} already-imported competitions...`
+      : "Importing all results (first run, full import)..."
+  );
+  const columns = [
+    "competition_id", "event_id", "round_type_id", "pos", "best", "average",
+    "person_name", "person_id", "person_country_id", "format_id",
+    "regional_single_record", "regional_average_record",
+  ];
+  const rows: SqlValue[][] = [];
+  const newCompIds = new Set<string>();
   for await (const row of readTSV(filePath)) {
-    const personCountryId = col(row, "person_country_id", "personCountryId");
-    const personId = col(row, "person_id", "personId");
-    if (personCountryId !== COUNTRY && !followedIds.has(personId)) continue;
-    rows.push({
-      competition_id: col(row, "competition_id", "competitionId"), event_id: col(row, "event_id", "eventId"),
-      round_type_id: col(row, "round_type_id", "roundTypeId"), pos: Number(row["pos"]) || 0,
-      best: Number(row["best"]) || 0, average: Number(row["average"]) || 0,
-      person_name: col(row, "person_name", "personName"), person_id: personId,
-      person_country_id: personCountryId, format_id: col(row, "format_id", "formatId"),
-      regional_single_record: col(row, "regional_single_record", "regionalSingleRecord") || null,
-      regional_average_record: col(row, "regional_average_record", "regionalAverageRecord") || null,
-    });
+    const competitionId = col(row, "competition_id", "competitionId");
+    if (existingCompIds.has(competitionId)) continue;
+    newCompIds.add(competitionId);
+    rows.push([
+      competitionId,
+      col(row, "event_id",                "eventId"),
+      col(row, "round_type_id",           "roundTypeId"),
+      Number(row["pos"]) || 0,
+      Number(row["best"]) || 0,
+      Number(row["average"]) || 0,
+      col(row, "person_name",             "personName"),
+      col(row, "person_id",               "personId"),
+      col(row, "person_country_id",       "personCountryId"),
+      col(row, "format_id",               "formatId"),
+      col(row, "regional_single_record",  "regionalSingleRecord") || null,
+      col(row, "regional_average_record", "regionalAverageRecord") || null,
+    ]);
   }
-  await batchInsert(rows, async (batch) => { await sql`INSERT INTO results ${sql(batch)}`; });
-  console.log(`  Imported ${rows.length} results (${followedIds.size} followed non-Swiss cubers included)`);
+  await bulkInsert(db, "results", columns, rows);
+  console.log(`  Imported ${rows.length} results from ${newCompIds.size} new competitions`);
 }
 
 async function importRanks(
-  sql: postgres.Sql, filePath: string, table: "ranks_single" | "ranks_average",
-  personCountryMap: Map<string, string>, personContinentMap: Map<string, string>
+  db: Client,
+  filePath: string,
+  table: "ranks_single" | "ranks_average",
+  personCountryMap: Map<string, string>,
+  personContinentMap: Map<string, string>
 ): Promise<void> {
   console.log(`Importing ${table}...`);
-  // No TRUNCATE — upsert so prev_best is preserved across imports.
-  // Stale rows (persons who lost a rank) are harmless for our use case.
-  const rows: { person_id: string; event_id: string; best: number; world_rank: number; continent_rank: number; country_rank: number; country_id: string | null; continent_id: string | null }[] = [];
+  const columns = [
+    "person_id", "event_id", "best",
+    "world_rank", "continent_rank", "country_rank",
+    "country_id", "continent_id",
+  ];
+  const allRows: { key: string; values: SqlValue[] }[] = [];
   for await (const row of readTSV(filePath)) {
     const personId = col(row, "person_id", "personId");
     if (!personId) continue;
-    rows.push({
-      person_id: personId, event_id: col(row, "event_id", "eventId"), best: Number(row["best"]) || 0,
-      world_rank: Number(col(row, "world_rank", "worldRank")) || 0,
-      continent_rank: Number(col(row, "continent_rank", "continentRank")) || 0,
-      country_rank: Number(col(row, "country_rank", "countryRank")) || 0,
-      country_id: personCountryMap.get(personId) ?? null, continent_id: personContinentMap.get(personId) || null,
+    allRows.push({
+      key: `${personId}:${col(row, "event_id", "eventId")}`,
+      values: [
+        personId,
+        col(row, "event_id",       "eventId"),
+        Number(row["best"]) || 0,
+        Number(col(row, "world_rank",     "worldRank"))     || 0,
+        Number(col(row, "continent_rank", "continentRank")) || 0,
+        Number(col(row, "country_rank",   "countryRank"))   || 0,
+        personCountryMap.get(personId) ?? null,
+        personContinentMap.get(personId) ?? null,
+      ],
     });
   }
-  const deduped = deduplicateBy(rows, (r) => `${r.person_id}:${r.event_id}`);
-  await batchInsert(deduped, async (batch) => {
-    if (table === "ranks_single") {
-      await sql`INSERT INTO ranks_single ${sql(batch)} ON CONFLICT (person_id, event_id) DO UPDATE SET
-        prev_best = CASE WHEN ranks_single.best != EXCLUDED.best THEN ranks_single.best ELSE ranks_single.prev_best END,
-        best=EXCLUDED.best, world_rank=EXCLUDED.world_rank, continent_rank=EXCLUDED.continent_rank, country_rank=EXCLUDED.country_rank, country_id=EXCLUDED.country_id, continent_id=EXCLUDED.continent_id`;
-    } else {
-      await sql`INSERT INTO ranks_average ${sql(batch)} ON CONFLICT (person_id, event_id) DO UPDATE SET
-        prev_best = CASE WHEN ranks_average.best != EXCLUDED.best THEN ranks_average.best ELSE ranks_average.prev_best END,
-        best=EXCLUDED.best, world_rank=EXCLUDED.world_rank, continent_rank=EXCLUDED.continent_rank, country_rank=EXCLUDED.country_rank, country_id=EXCLUDED.country_id, continent_id=EXCLUDED.continent_id`;
-    }
-  });
+  const deduped = deduplicateBy(allRows, (r) => r.key).map((r) => r.values);
+  await bulkInsert(db, table, columns, deduped,
+    `ON CONFLICT (person_id, event_id) DO UPDATE SET
+      prev_best      = CASE WHEN ${table}.best != EXCLUDED.best THEN ${table}.best ELSE ${table}.prev_best END,
+      best           = EXCLUDED.best,
+      world_rank     = EXCLUDED.world_rank,
+      continent_rank = EXCLUDED.continent_rank,
+      country_rank   = EXCLUDED.country_rank,
+      country_id     = EXCLUDED.country_id,
+      continent_id   = EXCLUDED.continent_id`);
   console.log(`  Imported ${deduped.length} ${table} entries`);
 }
 
@@ -189,18 +221,21 @@ async function buildPersonContinentMap(personsFile: string, countriesFile: strin
 }
 
 async function importRankBrackets(
-  sql: postgres.Sql, singleFile: string, avgFile: string, personContinentMap: Map<string, string>
+  db: Client,
+  singleFile: string,
+  avgFile: string,
+  personContinentMap: Map<string, string>
 ): Promise<void> {
   console.log("Importing rank brackets...");
-  await sql`TRUNCATE rank_brackets`;
+  await db.execute("DELETE FROM rank_brackets");
   for (const [type, filePath] of [["single", singleFile], ["average", avgFile]] as const) {
     const brackets = new Map<string, { world_rank: number; europe_rank: number | null }>();
     for await (const row of readTSV(filePath)) {
       const worldRank = Number(col(row, "world_rank", "worldRank")) || 0;
       if (!worldRank) continue;
       const personId = col(row, "person_id", "personId");
-      const eventId = col(row, "event_id", "eventId");
-      const best = Number(row["best"]) || 0;
+      const eventId  = col(row, "event_id",  "eventId");
+      const best     = Number(row["best"]) || 0;
       const contRank = Number(col(row, "continent_rank", "continentRank")) || 0;
       if (!best || !eventId) continue;
       const isEurope = personContinentMap.get(personId) === "_Europe";
@@ -215,32 +250,37 @@ async function importRankBrackets(
     }
     const rows = Array.from(brackets.entries()).map(([key, val]) => {
       const colon = key.indexOf(":");
-      return { event_id: key.slice(0, colon), type, best: Number(key.slice(colon + 1)), world_rank: val.world_rank, europe_rank: val.europe_rank };
+      return [key.slice(0, colon), type, Number(key.slice(colon + 1)), val.world_rank, val.europe_rank] as SqlValue[];
     });
-    await batchInsert(rows, async (batch) => {
-      await sql`INSERT INTO rank_brackets ${sql(batch)} ON CONFLICT (event_id, type, best) DO UPDATE SET world_rank=LEAST(rank_brackets.world_rank,EXCLUDED.world_rank), europe_rank=COALESCE(LEAST(rank_brackets.europe_rank,EXCLUDED.europe_rank),rank_brackets.europe_rank,EXCLUDED.europe_rank)`;
-    });
+    await bulkInsert(db, "rank_brackets", ["event_id", "type", "best", "world_rank", "europe_rank"], rows,
+      `ON CONFLICT (event_id, type, best) DO UPDATE SET
+        world_rank  = MIN(rank_brackets.world_rank,  EXCLUDED.world_rank),
+        europe_rank = COALESCE(MIN(rank_brackets.europe_rank, EXCLUDED.europe_rank), rank_brackets.europe_rank, EXCLUDED.europe_rank)`);
     console.log(`  ${type}: ${rows.length} brackets`);
   }
 }
 
 const CACHE_DAYS = [3, 7, 14, 30, 60, 90];
 
-async function buildPRCache(sql: postgres.Sql): Promise<void> {
+async function buildPRCache(db: Client): Promise<void> {
   console.log("Building PR cache...");
   for (const days of CACHE_DAYS) {
     const persons = await fetchPRsImpl(days);
-    const personsJson = JSON.parse(JSON.stringify(persons));
-    await sql`INSERT INTO pr_cache (days, result, computed_at) VALUES (${days}, ${sql.json(personsJson)}, NOW()) ON CONFLICT (days) DO UPDATE SET result=EXCLUDED.result, computed_at=EXCLUDED.computed_at`;
+    await db.execute({
+      sql: `INSERT INTO pr_cache (days, result, computed_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT (days) DO UPDATE SET result=EXCLUDED.result, computed_at=EXCLUDED.computed_at`,
+      args: [days, JSON.stringify(persons)],
+    });
     console.log(`  ${days}d → ${persons.length} persons`);
   }
 }
 
 export async function runWcaImport(): Promise<void> {
-  const DATABASE_URL = process.env.DATABASE_URL;
-  if (!DATABASE_URL) throw new Error("DATABASE_URL is not set");
+  const url = process.env.TURSO_DATABASE_URL;
+  if (!url) throw new Error("TURSO_DATABASE_URL is not set");
 
-  const sql = postgres(DATABASE_URL, { ssl: "require", max: 5 });
+  const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
   const tmpDir = join(tmpdir(), `wca-import-${Date.now()}`);
   const zipPath = join(tmpDir, "WCA_export.zip");
   const extractDir = join(tmpDir, "extracted");
@@ -266,9 +306,9 @@ export async function runWcaImport(): Promise<void> {
     }
 
     const personsFile = findTsv("Persons");
-    const { personCountryMap } = await importPersons(sql, personsFile);
-    await importCompetitions(sql, findTsv("Competitions"));
-    await importResults(sql, findTsv("Results"));
+    const { personCountryMap } = await importPersons(db, personsFile);
+    await importCompetitions(db, findTsv("Competitions"));
+    await importResults(db, findTsv("Results"));
 
     let personContinentMap = new Map<string, string>();
     try {
@@ -277,21 +317,26 @@ export async function runWcaImport(): Promise<void> {
       console.warn("Could not build personContinentMap:", e);
     }
 
-    await importRanks(sql, findTsv("ranks_single"), "ranks_single", personCountryMap, personContinentMap);
-    await importRanks(sql, findTsv("ranks_average"), "ranks_average", personCountryMap, personContinentMap);
+    await importRanks(db, findTsv("ranks_single"),  "ranks_single",  personCountryMap, personContinentMap);
+    await importRanks(db, findTsv("ranks_average"), "ranks_average", personCountryMap, personContinentMap);
 
     try {
-      await importRankBrackets(sql, findTsv("ranks_single"), findTsv("ranks_average"), personContinentMap);
+      await importRankBrackets(db, findTsv("ranks_single"), findTsv("ranks_average"), personContinentMap);
     } catch (e) {
       console.warn("Skipping rank_brackets import:", e);
     }
 
-    await buildPRCache(sql);
+    await buildPRCache(db);
 
-    await sql`INSERT INTO import_metadata (key, value, updated_at) VALUES ('imported_at', NOW()::text, NOW()) ON CONFLICT (key) DO UPDATE SET value=NOW()::text, updated_at=NOW()`;
+    await db.execute({
+      sql: `INSERT INTO import_metadata (key, value, updated_at)
+            VALUES ('imported_at', datetime('now'), datetime('now'))
+            ON CONFLICT (key) DO UPDATE SET value=datetime('now'), updated_at=datetime('now')`,
+      args: [],
+    });
     console.log("\nImport complete!");
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
-    await sql.end();
+    db.close();
   }
 }

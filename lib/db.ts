@@ -1,24 +1,24 @@
-import postgres from "postgres";
+import { createClient, type Client, type InArgs } from "@libsql/client";
 
-const connectionString = process.env.DATABASE_URL;
+const globalForDb = globalThis as unknown as { db: Client };
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL environment variable is not set");
+function createDb(): Client {
+  const url = process.env.TURSO_DATABASE_URL;
+  if (!url) throw new Error("TURSO_DATABASE_URL environment variable is not set");
+  return createClient({
+    url,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
 }
 
-// Re-use connection across hot-reloads in development
-const globalForDb = globalThis as unknown as { sql: ReturnType<typeof postgres> };
+export const db = globalForDb.db ?? createDb();
+if (process.env.NODE_ENV !== "production") globalForDb.db = db;
 
-export const sql =
-  globalForDb.sql ??
-  postgres(connectionString, {
-    ssl: "require",
-    max: 10,
-    idle_timeout: 20,
-    connect_timeout: 10,
-    max_lifetime: 60 * 10,
-    // Kill any query that runs longer than 15 seconds
-    connection: { statement_timeout: 15000 },
-  });
-
-if (process.env.NODE_ENV !== "production") globalForDb.sql = sql;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function query<T = Record<string, any>>(
+  sql: string,
+  args: InArgs = []
+): Promise<T[]> {
+  const result = await db.execute({ sql, args });
+  return result.rows as unknown as T[];
+}

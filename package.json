@@ -4,18 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "tsx scripts/setup-db.ts && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "db:setup": "tsx scripts/setup-db.ts",
     "db:import": "tsx scripts/import-wca.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.3",
     "@types/bcryptjs": "^2.4.6",
     "adm-zip": "^0.5.16",
     "bcryptjs": "^3.0.3",
     "next": "^15.0.0",
-    "postgres": "^3.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
