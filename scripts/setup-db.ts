@@ -156,6 +156,14 @@ async function main() {
     CREATE INDEX IF NOT EXISTS idx_ranks_average_event_continent_best
       ON ranks_average (event_id, continent_id, best)
   `);
+  await exec(`
+    CREATE INDEX IF NOT EXISTS idx_ranks_single_event_best
+      ON ranks_single (event_id, best)
+  `);
+  await exec(`
+    CREATE INDEX IF NOT EXISTS idx_ranks_average_event_best
+      ON ranks_average (event_id, best)
+  `);
   await exec(`CREATE INDEX IF NOT EXISTS idx_persons_wca_id ON persons (wca_id)`);
 
   // Drop old bravos table if it's missing the event_id column (schema upgrade)

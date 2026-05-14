@@ -12,7 +12,7 @@
  * gracefully when WCA Live is unavailable.
  */
 
-import { getVirtualRankings, getVirtualNRs, getPersonCountries, getRanksForPersons, getPrevBestsFromResults } from "./queries";
+import { getVirtualAllRanks, getPersonLocations, getRanksForPersons, getPrevBestsFromResults } from "./queries";
 import type { PersonPRs, PR, RankMap } from "./queries";
 
 const WCA_LIVE_API = "https://live.worldcubeassociation.org/api";
@@ -233,13 +233,9 @@ export async function fetchLivePRs(
   );
 
   const personIds = Array.from(personMap.keys());
-  const allPRs = Array.from(personMap.values()).flatMap((p) => p.prs);
 
-  const [rankings, personCountries, ranks] = await Promise.all([
-    getVirtualRankings(
-      allPRs.map((pr) => ({ eventId: pr.eventId, type: pr.type, time: pr.time }))
-    ),
-    getPersonCountries(personIds).catch(() => new Map<string, string>()),
+  const [locations, ranks] = await Promise.all([
+    getPersonLocations(personIds).catch(() => new Map<string, { countryId: string; continentId: string | null }>()),
     getRanksForPersons(personIds).catch(() => ({
       single: new Map<string, number>(),
       average: new Map<string, number>(),
@@ -248,23 +244,22 @@ export async function fetchLivePRs(
     })),
   ]);
 
-  const nrs = await getVirtualNRs(
-    Array.from(personMap.entries()).flatMap(([wcaId, p]) => {
-      const countryId = personCountries.get(wcaId);
-      if (!countryId) return [];
-      return p.prs.map((pr) => ({ eventId: pr.eventId, type: pr.type, time: pr.time, countryId }));
-    })
-  );
+  const rankInputs = Array.from(personMap.entries()).flatMap(([wcaId, p]) => {
+    const loc = locations.get(wcaId);
+    if (!loc) return [];
+    return p.prs.map((pr) => ({
+      eventId: pr.eventId, type: pr.type, time: pr.time,
+      countryId: loc.countryId, continentId: loc.continentId,
+    }));
+  });
+  const allRanks = await getVirtualAllRanks(rankInputs);
 
   for (const [wcaId, p] of personMap.entries()) {
-    const countryId = personCountries.get(wcaId);
+    const loc = locations.get(wcaId);
     for (const pr of p.prs) {
-      const r = rankings.get(`${pr.eventId}:${pr.type}:${pr.time}`);
-      if (r) { pr.wr = r.wr; pr.cr = r.cr; }
-      if (countryId) {
-        const nr = nrs.get(`${pr.eventId}:${pr.type}:${pr.time}:${countryId}`);
-        if (nr != null) pr.nr = nr;
-      }
+      const rankKey = `${pr.eventId}:${pr.type}:${pr.time}:${loc?.countryId ?? ""}`;
+      const r = allRanks.get(rankKey);
+      if (r) { pr.wr = r.wr; pr.cr = r.cr; pr.nr = r.nr; }
       const key = `${wcaId}:${pr.eventId}`;
       const dbBest = pr.type === "single" ? ranks.single.get(key) : ranks.average.get(key);
       const dbPrev = pr.type === "single" ? ranks.prevSingle?.get(key) : ranks.prevAverage?.get(key);
@@ -337,24 +332,20 @@ export async function fetchLivePRsForPersons(
     )
   );
 
-  const personCountries = await getPersonCountries(personIds).catch(() => new Map<string, string>());
+  const locations = await getPersonLocations(personIds).catch(
+    () => new Map<string, { countryId: string; continentId: string | null }>()
+  );
 
-  const allPRs = Array.from(personMap.values()).flatMap((p) => p.prs);
-  const [rankings, nrs] = await Promise.all([
-    getVirtualRankings(
-      allPRs.map((pr) => ({ eventId: pr.eventId, type: pr.type, time: pr.time }))
-    ),
-    getVirtualNRs(
-      Array.from(personMap.entries()).flatMap(([wcaId, p]) => {
-        const countryId = personCountries.get(wcaId);
-        if (!countryId) return [];
-        return p.prs.map((pr) => ({ eventId: pr.eventId, type: pr.type, time: pr.time, countryId }));
-      })
-    ),
-  ]);
+  const rankInputs = Array.from(personMap.entries()).flatMap(([wcaId, p]) => {
+    const loc = locations.get(wcaId);
+    if (!loc) return [];
+    return p.prs.map((pr) => ({
+      eventId: pr.eventId, type: pr.type, time: pr.time,
+      countryId: loc.countryId, continentId: loc.continentId,
+    }));
+  });
+  const allRanks = await getVirtualAllRanks(rankInputs);
 
-  // Collect PRs that still have no prevTime — happens when ranks.prevSingle
-  // is NULL (first import never fires ON CONFLICT). Fall back to results table.
   const missingPrevTime = Array.from(personMap.entries()).flatMap(([wcaId, p]) =>
     p.prs
       .filter((pr) => pr.prevTime === undefined)
@@ -363,14 +354,11 @@ export async function fetchLivePRsForPersons(
   const prevBests = await getPrevBestsFromResults(missingPrevTime).catch(() => new Map<string, number>());
 
   for (const [wcaId, p] of personMap.entries()) {
-    const countryId = personCountries.get(wcaId);
+    const loc = locations.get(wcaId);
     for (const pr of p.prs) {
-      const r = rankings.get(`${pr.eventId}:${pr.type}:${pr.time}`);
-      if (r) { pr.wr = r.wr; pr.cr = r.cr; }
-      if (countryId) {
-        const nr = nrs.get(`${pr.eventId}:${pr.type}:${pr.time}:${countryId}`);
-        if (nr != null) pr.nr = nr;
-      }
+      const rankKey = `${pr.eventId}:${pr.type}:${pr.time}:${loc?.countryId ?? ""}`;
+      const r = allRanks.get(rankKey);
+      if (r) { pr.wr = r.wr; pr.cr = r.cr; pr.nr = r.nr; }
       if (pr.prevTime === undefined) {
         const prev = prevBests.get(`${wcaId}:${pr.eventId}:${pr.type}`);
         if (prev) pr.prevTime = prev;
