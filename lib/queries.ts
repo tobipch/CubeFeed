@@ -74,9 +74,9 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
       r.person_name,
       r.event_id,
       r.competition_id,
-      c.name            AS competition_name,
-      c.city_name,
-      c.end_date        AS end_date,
+      COALESCE(c.name, r.competition_id) AS competition_name,
+      COALESCE(c.city_name, '')          AS city_name,
+      COALESCE(c.end_date, date('now'))  AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -102,20 +102,20 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
           AND r2.average > r.average AND r2.average > 0
       ) AS prev_avg_best
     FROM results r
-    JOIN competitions c ON r.competition_id = c.id
+    LEFT JOIN competitions c ON r.competition_id = c.id
     LEFT JOIN ranks_single rs
            ON r.person_id = rs.person_id AND r.event_id = rs.event_id
     LEFT JOIN ranks_average ra
            ON r.person_id = ra.person_id AND r.event_id = ra.event_id
     WHERE
-      c.end_date >= ?
-      AND c.end_date <= ?
+      COALESCE(c.end_date, date('now')) >= ?
+      AND COALESCE(c.end_date, date('now')) <= ?
       AND (
         (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
         OR
         (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best)
       )
-    ORDER BY c.end_date DESC, r.person_name, r.event_id`,
+    ORDER BY COALESCE(c.end_date, date('now')) DESC, r.person_name, r.event_id`,
     [cutoff, tomorrow]
   );
 
@@ -157,9 +157,9 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
       r.person_name,
       r.event_id,
       r.competition_id,
-      c.name            AS competition_name,
-      c.city_name,
-      c.end_date        AS end_date,
+      COALESCE(c.name, r.competition_id) AS competition_name,
+      COALESCE(c.city_name, '')          AS city_name,
+      COALESCE(c.end_date, date('now'))  AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -185,21 +185,21 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
           AND r2.average > r.average AND r2.average > 0
       ) AS prev_avg_best
     FROM results r
-    JOIN competitions c ON r.competition_id = c.id
+    LEFT JOIN competitions c ON r.competition_id = c.id
     LEFT JOIN ranks_single rs
            ON r.person_id = rs.person_id AND r.event_id = rs.event_id
     LEFT JOIN ranks_average ra
            ON r.person_id = ra.person_id AND r.event_id = ra.event_id
     WHERE
       r.person_id IN (${placeholders})
-      AND c.end_date >= ?
-      AND c.end_date <= ?
+      AND COALESCE(c.end_date, date('now')) >= ?
+      AND COALESCE(c.end_date, date('now')) <= ?
       AND (
         (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
         OR
         (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best)
       )
-    ORDER BY c.end_date DESC, r.person_name, r.event_id`,
+    ORDER BY COALESCE(c.end_date, date('now')) DESC, r.person_name, r.event_id`,
     [...personIds, cutoff, tomorrow]
   );
   return groupByPerson(rows);

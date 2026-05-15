@@ -80,7 +80,6 @@ function buildDate(year: string, month: string, day: string): string | null {
 
 async function importCompetitions(db: Client, filePath: string): Promise<void> {
   console.log("Importing competitions...");
-  await db.execute("DELETE FROM competitions");
   const columns = ["id", "name", "city_name", "country_id", "start_date", "end_date"];
   const rows: SqlValue[][] = [];
   for await (const row of readTSV(filePath)) {
@@ -102,7 +101,6 @@ async function importPersons(
   filePath: string
 ): Promise<{ personCountryMap: Map<string, string> }> {
   console.log("Importing all persons (worldwide)...");
-  await db.execute("DELETE FROM persons");
   const personCountryMap = new Map<string, string>();
   const allRows: { key: string; values: SqlValue[] }[] = [];
   for await (const row of readTSV(filePath)) {
@@ -227,7 +225,6 @@ async function importRankBrackets(
   personContinentMap: Map<string, string>
 ): Promise<void> {
   console.log("Importing rank brackets...");
-  await db.execute("DELETE FROM rank_brackets");
   for (const [type, filePath] of [["single", singleFile], ["average", avgFile]] as const) {
     const brackets = new Map<string, { world_rank: number; europe_rank: number | null }>();
     for await (const row of readTSV(filePath)) {
