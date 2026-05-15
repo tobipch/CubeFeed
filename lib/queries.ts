@@ -74,9 +74,9 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
       r.person_name,
       r.event_id,
       r.competition_id,
-      c.name            AS competition_name,
-      c.city_name,
-      c.end_date        AS end_date,
+      COALESCE(c.name, r.competition_id) AS competition_name,
+      COALESCE(c.city_name, '')          AS city_name,
+      COALESCE(c.end_date, CURDATE())    AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -102,21 +102,20 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
           AND r2.average > r.average AND r2.average > 0
       ) AS prev_avg_best
     FROM results r
-    JOIN competitions c ON r.competition_id = c.id
+    LEFT JOIN competitions c ON r.competition_id = c.id
     LEFT JOIN ranks_single rs
            ON r.person_id = rs.person_id AND r.event_id = rs.event_id
     LEFT JOIN ranks_average ra
            ON r.person_id = ra.person_id AND r.event_id = ra.event_id
     WHERE
-      r.person_country_id = 'Switzerland'
-      AND c.end_date >= ?
-      AND c.end_date <= ?
+      COALESCE(c.end_date, CURDATE()) >= ?
+      AND COALESCE(c.end_date, CURDATE()) <= ?
       AND (
         (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
         OR
         (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best)
       )
-    ORDER BY c.end_date DESC, r.person_name, r.event_id`,
+    ORDER BY COALESCE(c.end_date, CURDATE()) DESC, r.person_name, r.event_id`,
     [cutoff, tomorrow]
   );
 
@@ -141,22 +140,6 @@ export interface RankMap {
   prevAverage?: Map<string, number>;
 }
 
-export async function getAllSwissRanks(): Promise<RankMap> {
-  const [singles, averages] = await Promise.all([
-    query<{ person_id: string; event_id: string; best: number }>(
-      "SELECT person_id, event_id, best FROM ranks_single"
-    ),
-    query<{ person_id: string; event_id: string; best: number }>(
-      "SELECT person_id, event_id, best FROM ranks_average"
-    ),
-  ]);
-  const single = new Map<string, number>();
-  const average = new Map<string, number>();
-  for (const r of singles) single.set(`${r.person_id}:${r.event_id}`, r.best);
-  for (const r of averages) average.set(`${r.person_id}:${r.event_id}`, r.best);
-  return { single, average };
-}
-
 export async function fetchPRsForPersons(personIds: string[], days: number): Promise<PersonPRs[]> {
   if (personIds.length === 0) return [];
 
@@ -174,9 +157,9 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
       r.person_name,
       r.event_id,
       r.competition_id,
-      c.name            AS competition_name,
-      c.city_name,
-      c.end_date        AS end_date,
+      COALESCE(c.name, r.competition_id) AS competition_name,
+      COALESCE(c.city_name, '')          AS city_name,
+      COALESCE(c.end_date, CURDATE())    AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -202,21 +185,21 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
           AND r2.average > r.average AND r2.average > 0
       ) AS prev_avg_best
     FROM results r
-    JOIN competitions c ON r.competition_id = c.id
+    LEFT JOIN competitions c ON r.competition_id = c.id
     LEFT JOIN ranks_single rs
            ON r.person_id = rs.person_id AND r.event_id = rs.event_id
     LEFT JOIN ranks_average ra
            ON r.person_id = ra.person_id AND r.event_id = ra.event_id
     WHERE
       r.person_id IN (${placeholders})
-      AND c.end_date >= ?
-      AND c.end_date <= ?
+      AND COALESCE(c.end_date, CURDATE()) >= ?
+      AND COALESCE(c.end_date, CURDATE()) <= ?
       AND (
         (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
         OR
         (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best)
       )
-    ORDER BY c.end_date DESC, r.person_name, r.event_id`,
+    ORDER BY COALESCE(c.end_date, CURDATE()) DESC, r.person_name, r.event_id`,
     [...personIds, cutoff, tomorrow]
   );
   return groupByPerson(rows);
@@ -336,108 +319,106 @@ function groupByPerson(rows: PRRow[]): PersonPRs[] {
     });
 }
 
-// ─── Virtual rankings ─────────────────────────────────────────────────────────
+// ─── Virtual rankings (for WCA Live results not yet in our DB) ───────────────
 
-// WCA country IDs (_Europe continent)
-const EUROPE_COUNTRY_IDS = [
-  "Albania", "Andorra", "Armenia", "Austria", "Azerbaijan", "Belarus", "Belgium",
-  "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czech Republic",
-  "Denmark", "Estonia", "Finland", "France", "Georgia", "Germany", "Gibraltar",
-  "Greece", "Hungary", "Iceland", "Ireland", "Israel", "Italy", "Kosovo",
-  "Latvia", "Liechtenstein", "Lithuania", "Luxembourg", "Malta", "Moldova",
-  "Monaco", "Montenegro", "Netherlands", "North Macedonia", "Norway", "Poland",
-  "Portugal", "Romania", "Russia", "San Marino", "Serbia", "Slovakia", "Slovenia",
-  "Spain", "Sweden", "Switzerland", "Turkey", "Ukraine", "United Kingdom",
-];
-
-interface VirtualRanking { wr: number | null; cr: number | null }
+export interface VirtualRanks { wr: number | null; cr: number | null; nr: number | null }
 
 /**
- * For each (eventId, type, time) triple in `prs`, returns the virtual world
- * rank and European continental rank that result would have in the WCA DB.
- * Uses the rank_brackets table (populated by the import script).
- * Returns an empty map on error (e.g. table not yet created).
- *
- * SQLite doesn't support unnest(), so each PR is queried individually.
- * This is fine in practice because the number of PRs per feed request is small.
+ * Returns the country and continent for each person, read from ranks_single.
+ * Used to compute virtual CR and NR for live results.
  */
-export async function getVirtualRankings(
-  prs: Array<{ eventId: string; type: "single" | "average"; time: number }>
-): Promise<Map<string, VirtualRanking>> {
-  if (prs.length === 0) return new Map();
-
-  const result = new Map<string, VirtualRanking>();
-  const europePlaceholders = EUROPE_COUNTRY_IDS.map(() => "?").join(", ");
-
-  for (const pr of prs) {
-    try {
-      const rankTable = pr.type === "single" ? "ranks_single" : "ranks_average";
-
-      const [wrRows, crRows] = await Promise.all([
-        query<{ virtual_wr: number | null }>(
-          `SELECT MIN(world_rank) AS virtual_wr
-           FROM rank_brackets
-           WHERE event_id = ? AND type = ? AND best >= ?`,
-          [pr.eventId, pr.type, pr.time]
-        ),
-        query<{ virtual_cr: number }>(
-          `SELECT 1 + COUNT(*) AS virtual_cr
-           FROM ${rankTable}
-           WHERE event_id = ? AND country_id IN (${europePlaceholders}) AND best < ? AND best > 0`,
-          [pr.eventId, ...EUROPE_COUNTRY_IDS, pr.time]
-        ),
-      ]);
-
-      result.set(`${pr.eventId}:${pr.type}:${pr.time}`, {
-        wr: wrRows[0]?.virtual_wr ?? null,
-        cr: crRows[0]?.virtual_cr ?? null,
-      });
-    } catch {
-      // Ignore individual failures (e.g. table not yet populated)
-    }
-  }
-
-  return result;
-}
-
-export async function getPersonCountries(personIds: string[]): Promise<Map<string, string>> {
+export async function getPersonLocations(
+  personIds: string[]
+): Promise<Map<string, { countryId: string; continentId: string | null }>> {
   if (personIds.length === 0) return new Map();
   const placeholders = personIds.map(() => "?").join(", ");
-  // GROUP BY picks an arbitrary country_id per person — fine since it's stable per person
-  const rows = await query<{ person_id: string; country_id: string }>(
-    `SELECT person_id, country_id FROM ranks_single
-     WHERE person_id IN (${placeholders}) AND country_id IS NOT NULL
-     GROUP BY person_id`,
+  const rows = await query<{ person_id: string; country_id: string; continent_id: string | null }>(
+    `SELECT person_id, country_id, continent_id FROM ranks_single
+     WHERE person_id IN (${placeholders}) AND country_id IS NOT NULL`,
     personIds
   );
-  return new Map(rows.map((r) => [r.person_id, r.country_id]));
+  return new Map(rows.map((r) => [r.person_id, { countryId: r.country_id, continentId: r.continent_id }]));
 }
 
 /**
- * For each (eventId, type, time, countryId) entry, returns the virtual national rank.
- * SQLite doesn't support unnest(), so each entry is queried individually.
+ * For each (eventId, type, time, countryId, continentId) entry, computes
+ * virtual WR, CR and NR via direct SQL counts against ranks_single/average.
+ * Works correctly for competitors from any country and continent.
+ * Each PR's three queries run in parallel; PRs are processed sequentially.
  */
-export async function getVirtualNRs(
-  prs: Array<{ eventId: string; type: "single" | "average"; time: number; countryId: string }>
-): Promise<Map<string, number>> {
+export async function getVirtualAllRanks(
+  prs: Array<{
+    eventId: string;
+    type: "single" | "average";
+    time: number;
+    countryId: string;
+    continentId: string | null;
+  }>
+): Promise<Map<string, VirtualRanks>> {
   if (prs.length === 0) return new Map();
 
-  const result = new Map<string, number>();
+  const result = new Map<string, VirtualRanks>();
 
   for (const pr of prs) {
+    const table = pr.type === "single" ? "ranks_single" : "ranks_average";
+    const key = `${pr.eventId}:${pr.type}:${pr.time}:${pr.countryId}`;
     try {
-      const rankTable = pr.type === "single" ? "ranks_single" : "ranks_average";
-      const rows = await query<{ nr: number }>(
-        `SELECT 1 + COUNT(*) AS nr
-         FROM ${rankTable}
-         WHERE event_id = ? AND country_id = ? AND best < ? AND best > 0`,
-        [pr.eventId, pr.countryId, pr.time]
-      );
-      result.set(`${pr.eventId}:${pr.type}:${pr.time}:${pr.countryId}`, rows[0]?.nr ?? 1);
+      const [wrRows, crRows, nrRows] = await Promise.all([
+        query<{ wr: number }>(
+          `SELECT 1 + COUNT(*) AS wr FROM ${table}
+           WHERE event_id = ? AND best < ? AND best > 0`,
+          [pr.eventId, pr.time]
+        ),
+        pr.continentId
+          ? query<{ cr: number }>(
+              `SELECT 1 + COUNT(*) AS cr FROM ${table}
+               WHERE event_id = ? AND continent_id = ? AND best < ? AND best > 0`,
+              [pr.eventId, pr.continentId, pr.time]
+            )
+          : Promise.resolve([] as { cr: number }[]),
+        query<{ nr: number }>(
+          `SELECT 1 + COUNT(*) AS nr FROM ${table}
+           WHERE event_id = ? AND country_id = ? AND best < ? AND best > 0`,
+          [pr.eventId, pr.countryId, pr.time]
+        ),
+      ]);
+      result.set(key, {
+        wr: wrRows[0]?.wr ?? null,
+        cr: crRows[0]?.cr ?? null,
+        nr: nrRows[0]?.nr ?? null,
+      });
     } catch {
-      // Ignore individual failures
+      // ignore
     }
   }
 
   return result;
 }
+
+/**
+ * For each (personId, eventId) pair, returns the second-best time from the
+ * results table (i.e. the best time excluding their all-time best).
+ * Used as a prevTime fallback when ranks_single.prev_best is NULL.
+ */
+export async function getPrevBestsFromResults(
+  pairs: Array<{ personId: string; eventId: string; currentBest: number; type: "single" | "average" }>
+): Promise<Map<string, number>> {
+  if (pairs.length === 0) return new Map();
+  const result = new Map<string, number>();
+  for (const { personId, eventId, currentBest, type } of pairs) {
+    const col = type === "single" ? "best" : "average";
+    try {
+      const rows = await query<{ prev: number }>(
+        `SELECT MIN(${col}) AS prev FROM results
+         WHERE person_id = ? AND event_id = ? AND ${col} > ? AND ${col} > 0`,
+        [personId, eventId, currentBest]
+      );
+      const prev = rows[0]?.prev;
+      if (prev) result.set(`${personId}:${eventId}:${type}`, prev);
+    } catch {
+      // ignore
+    }
+  }
+  return result;
+}
+

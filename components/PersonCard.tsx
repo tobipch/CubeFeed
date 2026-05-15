@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
-import { eventName, eventIconUrl, EVENT_ORDER, typeLabel } from "@/lib/events";
+import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
 
 interface Props {
@@ -254,13 +254,10 @@ function PRBadge({
         {/* Row 1: icon + event + type (left) | competition name (right, truncated) */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={eventIconUrl(pr.eventId)}
-              alt={eventName(pr.eventId)}
-              width={13}
-              height={13}
-              className="opacity-60 shrink-0"
+            <span
+              className={`cubing-icon event-${pr.eventId} opacity-60 shrink-0`}
+              aria-label={eventName(pr.eventId)}
+              style={{ fontSize: 13 }}
             />
             <span className="text-xs font-medium text-gray-500">
               {eventName(pr.eventId)}
@@ -290,9 +287,9 @@ function PRBadge({
             )}
           </div>
           <div className="flex items-center gap-1 ml-auto shrink-0">
-            {pr.nr && <RankBadge label="NR" value={pr.nr} />}
-            {pr.cr && <RankBadge label="CR" value={pr.cr} />}
-            {pr.wr && <RankBadge label="WR" value={pr.wr} />}
+            {(pr.nr ?? 0) > 0 && <RankBadge label="NR" value={pr.nr!} />}
+            {(pr.cr ?? 0) > 0 && <RankBadge label="CR" value={pr.cr!} />}
+            {(pr.wr ?? 0) > 0 && <RankBadge label="WR" value={pr.wr!} />}
           </div>
         </div>
       </a>

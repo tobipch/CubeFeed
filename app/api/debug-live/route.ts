@@ -1,5 +1,5 @@
 /**
- * Temporary debug endpoint — remove once WCA Live integration is confirmed working.
+ * Debug endpoint for WCA Live integration.
  * Visit /api/debug-live?days=30 (or ?days=90 etc.)
  * Optional: &comp=<WCA Live internal numeric id> to inspect a specific competition.
  */
@@ -123,27 +123,23 @@ export async function GET(request: Request) {
         total_competitors: comp.competitors?.length ?? 0,
       };
 
-      const swissCompetitors = (comp.competitors ?? []).filter(
-        (c: { country: { iso2: string } | null; wca_id: string | null }) =>
-          c.country?.iso2 === "CH"
-      );
-      const swissWithId = swissCompetitors.filter(
+      const allCompetitors = comp.competitors ?? [];
+      const withWcaId = allCompetitors.filter(
         (c: { wca_id: string | null }) => c.wca_id != null
       );
-      const swissWithoutId = swissCompetitors.filter(
+      const withoutWcaId = allCompetitors.filter(
         (c: { wca_id: string | null }) => c.wca_id == null
       );
 
-      out.swiss_competitor_count = swissCompetitors.length;
-      out.swiss_with_wca_id = swissWithId.length;
-      out.swiss_without_wca_id = swissWithoutId.map(
+      out.competitor_count = allCompetitors.length;
+      out.with_wca_id = withWcaId.length;
+      out.without_wca_id_names = withoutWcaId.slice(0, 10).map(
         (c: { name: string }) => c.name
       );
-      out.swiss_competitors = swissCompetitors.slice(0, 20);
 
-      // Batch-query results for first 5 Swiss competitors with wca_id
+      // Batch-query results for first 5 competitors with wca_id
       const sample: { id: string; wca_id: string | null; name: string }[] =
-        swissWithId.slice(0, 5);
+        withWcaId.slice(0, 5);
       if (sample.length > 0) {
         const aliases = sample
           .map(

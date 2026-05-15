@@ -20,6 +20,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@cubing/icons/dist/lib/@cubing/icons/cubing-icons.css"
+        />
+      </head>
       <body className={`${geist.className} ${dmMono.variable} bg-gray-50 text-gray-900 min-h-screen`}>
         {children}
       </body>

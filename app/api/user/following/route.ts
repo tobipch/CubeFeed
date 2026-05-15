@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
-import { db, query } from "@/lib/db";
+import { pool, query } from "@/lib/db";
 
 interface FollowedPerson {
   wcaId: string;
@@ -32,24 +32,24 @@ export async function PUT(req: Request) {
     }
     const persons = body as FollowedPerson[];
 
-    const tx = await db.transaction("write");
+    const conn = await pool.getConnection();
     try {
-      await tx.execute({
-        sql: "DELETE FROM user_following WHERE user_id = ?",
-        args: [user.id],
-      });
+      await conn.beginTransaction();
+      await conn.execute("DELETE FROM user_following WHERE user_id = ?", [user.id]);
       for (const p of persons) {
-        await tx.execute({
-          sql: `INSERT INTO user_following (user_id, wca_id, name)
-                VALUES (?, ?, ?)
-                ON CONFLICT (user_id, wca_id) DO UPDATE SET name = EXCLUDED.name`,
-          args: [user.id, p.wcaId, p.name],
-        });
+        await conn.execute(
+          `INSERT INTO user_following (user_id, wca_id, name)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE name = VALUES(name)`,
+          [user.id, p.wcaId, p.name]
+        );
       }
-      await tx.commit();
+      await conn.commit();
     } catch (e) {
-      await tx.rollback();
+      await conn.rollback();
       throw e;
+    } finally {
+      conn.release();
     }
 
     return Response.json({ ok: true });

@@ -31,10 +31,6 @@ export function eventName(id: string): string {
   return EVENT_NAMES[id] ?? id;
 }
 
-export function eventIconUrl(id: string): string {
-  return `https://cdn.jsdelivr.net/gh/cubing/icons@main/src/svg/event/${id}.svg`;
-}
-
 export function typeLabel(eventId: string, type: "single" | "average"): string {
   if (type === "single") return "Single";
   return MEAN_EVENTS.has(eventId) ? "Mean" : "Avg";

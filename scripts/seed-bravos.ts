@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { db, query } from "../lib/db.js";
+import { pool, query } from "../lib/db";
 
 async function main() {
   const rows = await query<{
@@ -27,16 +27,16 @@ async function main() {
   }
 
   for (const s of seeds) {
-    await db.execute({
-      sql: `INSERT INTO bravos (person_id, event_id, type, time, count)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (person_id, event_id, type, time) DO UPDATE SET count = ?`,
-      args: [s.personId, s.eventId, s.type, s.time, s.count, s.count],
-    });
+    await query(
+      `INSERT INTO bravos (person_id, event_id, type, time, count)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE count = VALUES(count)`,
+      [s.personId, s.eventId, s.type, s.time, s.count]
+    );
     console.log(`${s.count.toString().padStart(2)} Bravos → ${s.personId} ${s.eventId} ${s.type}`);
   }
 
   console.log(`\n${seeds.length} Einträge gesetzt.`);
 }
 
-main().catch(console.error).finally(() => db.close());
+main().catch(console.error).finally(() => pool.end());

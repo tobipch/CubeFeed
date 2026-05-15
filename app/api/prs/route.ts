@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchPRs } from "@/lib/queries";
+import { fetchPRs, getDbCompetitionIds, type PersonPRs } from "@/lib/queries";
+import { fetchLivePRs } from "@/lib/wca-live";
 
 const VALID_DAYS = [7, 14, 30, 60, 90];
 
@@ -11,10 +12,34 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const persons = await fetchPRs(days);
-    return NextResponse.json(persons);
+    const [dbPersons, knownCompIds] = await Promise.all([
+      fetchPRs(days),
+      getDbCompetitionIds(),
+    ]);
+
+    const livePRs = await fetchLivePRs(days, knownCompIds).catch(() => [] as PersonPRs[]);
+
+    return NextResponse.json(mergeFeed(dbPersons, livePRs));
   } catch (err) {
     console.error("DB query failed:", err);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
+}
+
+function mergeFeed(db: PersonPRs[], live: PersonPRs[]): PersonPRs[] {
+  if (live.length === 0) return db;
+
+  const result = db.map((p) => ({ ...p, prs: [...p.prs] }));
+  const byId = new Map(result.map((p) => [p.personId, p]));
+
+  for (const lp of live) {
+    const existing = byId.get(lp.personId);
+    if (existing) {
+      existing.prs.push(...lp.prs);
+    } else {
+      result.push({ ...lp });
+    }
+  }
+
+  return result;
 }

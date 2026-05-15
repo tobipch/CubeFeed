@@ -1,0 +1,25 @@
+name: Setup Database
+
+on:
+  workflow_dispatch: # Only manual trigger
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create tables
+        env:
+          MYSQL_HOST: tobipch.mysql.db.hostpoint.ch
+          MYSQL_USER: tobipch_admin
+          MYSQL_DATABASE: tobipch_cubefeed
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+        run: npm run db:setup

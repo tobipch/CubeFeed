@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
-import { db, query } from "@/lib/db";
+import { execute, query } from "@/lib/db";
 import { createSession, cookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import { cookies } from "next/headers";
 
@@ -33,11 +33,11 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const result = await db.execute({
-      sql: "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-      args: [trimmedUsername, passwordHash],
-    });
-    const userId = Number(result.lastInsertRowid);
+    const result = await execute(
+      "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+      [trimmedUsername, passwordHash]
+    );
+    const userId = result.insertId;
     const token = await createSession(userId);
 
     const jar = await cookies();
