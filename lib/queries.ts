@@ -76,7 +76,7 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
       r.competition_id,
       COALESCE(c.name, r.competition_id) AS competition_name,
       COALESCE(c.city_name, '')          AS city_name,
-      COALESCE(c.end_date, date('now'))  AS end_date,
+      COALESCE(c.end_date, CURDATE())    AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -108,14 +108,14 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
     LEFT JOIN ranks_average ra
            ON r.person_id = ra.person_id AND r.event_id = ra.event_id
     WHERE
-      COALESCE(c.end_date, date('now')) >= ?
-      AND COALESCE(c.end_date, date('now')) <= ?
+      COALESCE(c.end_date, CURDATE()) >= ?
+      AND COALESCE(c.end_date, CURDATE()) <= ?
       AND (
         (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
         OR
         (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best)
       )
-    ORDER BY COALESCE(c.end_date, date('now')) DESC, r.person_name, r.event_id`,
+    ORDER BY COALESCE(c.end_date, CURDATE()) DESC, r.person_name, r.event_id`,
     [cutoff, tomorrow]
   );
 
@@ -159,7 +159,7 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
       r.competition_id,
       COALESCE(c.name, r.competition_id) AS competition_name,
       COALESCE(c.city_name, '')          AS city_name,
-      COALESCE(c.end_date, date('now'))  AS end_date,
+      COALESCE(c.end_date, CURDATE())    AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -192,14 +192,14 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
            ON r.person_id = ra.person_id AND r.event_id = ra.event_id
     WHERE
       r.person_id IN (${placeholders})
-      AND COALESCE(c.end_date, date('now')) >= ?
-      AND COALESCE(c.end_date, date('now')) <= ?
+      AND COALESCE(c.end_date, CURDATE()) >= ?
+      AND COALESCE(c.end_date, CURDATE()) <= ?
       AND (
         (r.best > 0 AND rs.best IS NOT NULL AND r.best = rs.best)
         OR
         (r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best)
       )
-    ORDER BY COALESCE(c.end_date, date('now')) DESC, r.person_name, r.event_id`,
+    ORDER BY COALESCE(c.end_date, CURDATE()) DESC, r.person_name, r.event_id`,
     [...personIds, cutoff, tomorrow]
   );
   return groupByPerson(rows);
@@ -334,8 +334,7 @@ export async function getPersonLocations(
   const placeholders = personIds.map(() => "?").join(", ");
   const rows = await query<{ person_id: string; country_id: string; continent_id: string | null }>(
     `SELECT person_id, country_id, continent_id FROM ranks_single
-     WHERE person_id IN (${placeholders}) AND country_id IS NOT NULL
-     GROUP BY person_id`,
+     WHERE person_id IN (${placeholders}) AND country_id IS NOT NULL`,
     personIds
   );
   return new Map(rows.map((r) => [r.person_id, { countryId: r.country_id, continentId: r.continent_id }]));

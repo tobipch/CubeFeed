@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, query } from "@/lib/db";
+import { execute, query } from "@/lib/db";
 
 export async function GET() {
   try {
@@ -32,16 +32,17 @@ export async function POST(req: NextRequest) {
     if (!personId || !eventId || !type || !time || (delta !== 1 && delta !== -1)) {
       return NextResponse.json({ error: "Invalid" }, { status: 400 });
     }
-    // MAX(0, n) in SQLite acts as the scalar maximum — equivalent to PostgreSQL's GREATEST
-    const result = await db.execute({
-      sql: `INSERT INTO bravos (person_id, event_id, type, time, count)
-            VALUES (?, ?, ?, ?, MAX(0, ?))
-            ON CONFLICT (person_id, event_id, type, time) DO UPDATE
-            SET count = MAX(0, bravos.count + ?)
-            RETURNING count`,
-      args: [personId, eventId, type, time, delta, delta],
-    });
-    const count = result.rows[0]?.[0] ?? 0;
+    await execute(
+      `INSERT INTO bravos (person_id, event_id, type, time, count)
+       VALUES (?, ?, ?, ?, GREATEST(0, ?))
+       ON DUPLICATE KEY UPDATE count = GREATEST(0, count + ?)`,
+      [personId, eventId, type, time, delta, delta]
+    );
+    const rows = await query<{ count: number }>(
+      "SELECT count FROM bravos WHERE person_id = ? AND event_id = ? AND type = ? AND time = ?",
+      [personId, eventId, type, time]
+    );
+    const count = rows[0]?.count ?? 0;
     return NextResponse.json({ count });
   } catch {
     return NextResponse.json({ error: "DB error" }, { status: 500 });

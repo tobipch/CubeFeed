@@ -1,18 +1,21 @@
 /**
- * Downloads the latest WCA developer export and imports data into Turso/LibSQL.
+ * Downloads the latest WCA developer export and imports data into MariaDB.
  *
  * Usage:
  *   npm run db:import
  *
  * Required env:
- *   TURSO_DATABASE_URL  – libsql URL (e.g. libsql://db.turso.io or file:local.db)
- *   TURSO_AUTH_TOKEN    – Turso auth token (not needed for file: URLs)
+ *   MYSQL_HOST      – MariaDB hostname
+ *   MYSQL_USER      – Database user
+ *   MYSQL_PASSWORD  – Database password
+ *   MYSQL_DATABASE  – Database name
  *
  * Optional env:
- *   WCA_EXPORT_URL – Override the default download URL
+ *   MYSQL_PORT      – Port (default: 3306)
+ *   WCA_EXPORT_URL  – Override the default download URL
  */
 import "dotenv/config";
-import { runWcaImport } from "../lib/wca-import.js";
+import { runWcaImport } from "../lib/wca-import";
 
 runWcaImport().catch((err) => {
   console.error(err);

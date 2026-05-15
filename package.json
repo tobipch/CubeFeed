@@ -11,10 +11,10 @@
     "db:import": "tsx scripts/import-wca.ts"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.3",
     "@types/bcryptjs": "^2.4.6",
     "adm-zip": "^0.5.16",
     "bcryptjs": "^3.0.3",
+    "mysql2": "^3.22.3",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
