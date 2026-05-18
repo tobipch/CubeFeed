@@ -333,8 +333,15 @@ export async function getPersonLocations(
   if (personIds.length === 0) return new Map();
   const placeholders = personIds.map(() => "?").join(", ");
   const rows = await query<{ person_id: string; country_id: string; continent_id: string | null }>(
-    `SELECT person_id, country_id, continent_id FROM ranks_single
-     WHERE person_id IN (${placeholders}) AND country_id IS NOT NULL`,
+    `SELECT rs.person_id,
+            COALESCE(rs.country_id, p.country_id) AS country_id,
+            COALESCE(rs.continent_id, c.continent_id) AS continent_id
+     FROM ranks_single rs
+     LEFT JOIN persons p ON rs.person_id = p.wca_id AND p.sub_id = 1
+     LEFT JOIN countries c ON COALESCE(rs.country_id, p.country_id) = c.id
+     WHERE rs.person_id IN (${placeholders})
+       AND COALESCE(rs.country_id, p.country_id) IS NOT NULL
+     GROUP BY rs.person_id`,
     personIds
   );
   return new Map(rows.map((r) => [r.person_id, { countryId: r.country_id, continentId: r.continent_id }]));

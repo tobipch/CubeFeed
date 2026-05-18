@@ -203,6 +203,19 @@ async function importRanks(
   console.log(`  Imported ${deduped.length} ${table} entries`);
 }
 
+async function importCountries(pool: Pool, filePath: string): Promise<void> {
+  console.log("Importing countries...");
+  const rows: SqlValue[][] = [];
+  for await (const row of readTSV(filePath)) {
+    const id = row["id"] ?? "";
+    const continentId = col(row, "continent_id", "continentId");
+    if (id && continentId) rows.push([id, continentId]);
+  }
+  await bulkInsert(pool, "countries", ["id", "continent_id"], rows,
+    `ON DUPLICATE KEY UPDATE continent_id=VALUES(continent_id)`);
+  console.log(`  Imported ${rows.length} countries`);
+}
+
 async function buildPersonContinentMap(personsFile: string, countriesFile: string): Promise<Map<string, string>> {
   const continentMap = new Map<string, string>();
   for await (const row of readTSV(countriesFile)) {
@@ -316,19 +329,40 @@ export async function runWcaImport(): Promise<void> {
     }
 
     const personsFile = findTsv("Persons");
+    const countriesFile = findTsv("Countries");
     const { personCountryMap } = await importPersons(pool, personsFile);
     await importCompetitions(pool, findTsv("Competitions"));
     await importResults(pool, findTsv("Results"));
 
+    try {
+      await importCountries(pool, countriesFile);
+    } catch (e) {
+      console.warn("Could not import countries:", e);
+    }
+
     let personContinentMap = new Map<string, string>();
     try {
-      personContinentMap = await buildPersonContinentMap(personsFile, findTsv("Countries"));
+      personContinentMap = await buildPersonContinentMap(personsFile, countriesFile);
     } catch (e) {
       console.warn("Could not build personContinentMap:", e);
     }
 
     await importRanks(pool, findTsv("ranks_single"),  "ranks_single",  personCountryMap, personContinentMap);
     await importRanks(pool, findTsv("ranks_average"), "ranks_average", personCountryMap, personContinentMap);
+
+    // Fix any NULL continent_id values by joining ranks with persons + countries tables.
+    // This handles athletes missed by the in-memory personContinentMap (e.g. new competitors).
+    console.log("Fixing NULL continent_id in ranks tables...");
+    for (const table of ["ranks_single", "ranks_average"] as const) {
+      await pool.execute(
+        `UPDATE ${table} r
+         JOIN persons p ON r.person_id = p.wca_id AND p.sub_id = 1
+         JOIN countries c ON p.country_id = c.id
+         SET r.continent_id = c.continent_id
+         WHERE r.continent_id IS NULL`
+      );
+    }
+    console.log("  Done");
 
     try {
       await importRankBrackets(pool, findTsv("ranks_single"), findTsv("ranks_average"), personContinentMap);

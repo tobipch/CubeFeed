@@ -139,6 +139,14 @@ async function main() {
   `);
 
   await exec(`
+    CREATE TABLE IF NOT EXISTS countries (
+      id           VARCHAR(255) NOT NULL,
+      continent_id VARCHAR(255),
+      PRIMARY KEY (id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
+  await exec(`
     CREATE TABLE IF NOT EXISTS rank_brackets (
       event_id      VARCHAR(255) NOT NULL,
       type          VARCHAR(50) NOT NULL,
