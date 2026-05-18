@@ -309,7 +309,7 @@ function PRBadge({
           e.stopPropagation();
           onBravo?.();
         }}
-        className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
+        className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-2 sm:px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
         aria-label={isLiked ? "Remove bravo" : "Give bravo"}
       >
         <HeartIcon filled={isLiked} />
