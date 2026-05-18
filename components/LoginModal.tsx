@@ -118,6 +118,9 @@ export default function LoginModal({ onSuccess, onClose }: Props) {
               autoComplete="username"
               required
               minLength={3}
+              maxLength={30}
+              pattern="[a-zA-Z0-9_\-]+"
+              title="Nur Buchstaben, Zahlen, _ und - erlaubt"
               className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
               placeholder="e.g. max_cuber"
             />
