@@ -290,7 +290,7 @@ function PRBadge({
             </span>
             {prevTime !== undefined && (
               <span className="text-xs text-gray-400 font-mono tabular-nums">
-                before {formatTime(prevTime, pr.eventId, pr.type)}
+                (before {formatTime(prevTime, pr.eventId, pr.type)})
               </span>
             )}
           </div>
