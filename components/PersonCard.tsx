@@ -274,7 +274,7 @@ function PRBadge({
               {typeLabel(pr.eventId, pr.type)}
             </span>
           </div>
-          <span className="text-xs text-gray-400 truncate text-right ml-2 min-w-0">
+          <span className="text-xs text-gray-400 truncate min-w-0">
             {pr.competitionName}
           </span>
         </div>
