@@ -181,6 +181,17 @@ async function main() {
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
 
+  await exec(`
+    CREATE TABLE IF NOT EXISTS bravo_votes (
+      user_id   INT NOT NULL,
+      person_id VARCHAR(255) NOT NULL,
+      event_id  VARCHAR(255) NOT NULL,
+      type      VARCHAR(50)  NOT NULL,
+      time      INT          NOT NULL,
+      PRIMARY KEY (user_id, person_id, event_id, type, time)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
   // ── Auth tables ──────────────────────────────────────────────────────────────
   await exec(`
     CREATE TABLE IF NOT EXISTS users (

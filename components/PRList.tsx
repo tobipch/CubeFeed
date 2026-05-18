@@ -6,8 +6,6 @@ import { eventName, EVENT_ORDER } from "@/lib/events";
 import PersonCard from "./PersonCard";
 import JumpNav from "./JumpNav";
 
-const LIKED_KEY = "wca-bravos-liked";
-
 function bravoKey(personId: string, eventId: string, type: string, time: number) {
   return `${personId}:${eventId}:${type}:${time}`;
 }
@@ -24,13 +22,12 @@ export default function PRList({ persons, isLoggedIn, onLoginRequired }: Props) 
   const [liked, setLiked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(LIKED_KEY) ?? "[]");
-      setLiked(new Set(stored as string[]));
-    } catch {}
     fetch("/api/bravos")
       .then((r) => r.json())
-      .then((data: Record<string, number>) => setBravos(data))
+      .then((data: { counts: Record<string, number>; myVotes: string[] }) => {
+        setBravos(data.counts ?? {});
+        setLiked(new Set(data.myVotes ?? []));
+      })
       .catch(() => {});
   }, []);
 
@@ -46,20 +43,16 @@ export default function PRList({ persons, isLoggedIn, onLoginRequired }: Props) 
     }
     const key = bravoKey(personId, eventId, type, time);
     const isLiked = liked.has(key);
-    const delta = isLiked ? -1 : 1;
 
     // Optimistic update
     setBravos((prev) => ({
       ...prev,
-      [key]: Math.max(0, (prev[key] ?? 0) + delta),
+      [key]: Math.max(0, (prev[key] ?? 0) + (isLiked ? -1 : 1)),
     }));
     setLiked((prev) => {
       const next = new Set(prev);
       if (isLiked) next.delete(key);
       else next.add(key);
-      try {
-        localStorage.setItem(LIKED_KEY, JSON.stringify([...next]));
-      } catch {}
       return next;
     });
 
@@ -67,23 +60,26 @@ export default function PRList({ persons, isLoggedIn, onLoginRequired }: Props) 
       const res = await fetch("/api/bravos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personId, eventId, type, time, delta }),
+        body: JSON.stringify({ personId, eventId, type, time }),
       });
-      const data = (await res.json()) as { count: number };
+      const data = (await res.json()) as { count: number; voted: boolean };
       setBravos((prev) => ({ ...prev, [key]: data.count }));
+      setLiked((prev) => {
+        const next = new Set(prev);
+        if (data.voted) next.add(key);
+        else next.delete(key);
+        return next;
+      });
     } catch {
       // Revert optimistic update
       setBravos((prev) => ({
         ...prev,
-        [key]: Math.max(0, (prev[key] ?? 0) - delta),
+        [key]: Math.max(0, (prev[key] ?? 0) + (isLiked ? 1 : -1)),
       }));
       setLiked((prev) => {
         const next = new Set(prev);
         if (isLiked) next.add(key);
         else next.delete(key);
-        try {
-          localStorage.setItem(LIKED_KEY, JSON.stringify([...next]));
-        } catch {}
         return next;
       });
     }

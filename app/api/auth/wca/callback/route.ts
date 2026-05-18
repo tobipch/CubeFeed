@@ -13,6 +13,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/?auth_error=1", req.url));
   }
 
+  const state = searchParams.get("state");
+  const expectedState = req.cookies.get("wca_oauth_state")?.value;
+  if (!state || !expectedState || state !== expectedState) {
+    return NextResponse.redirect(new URL("/?auth_error=1", req.url));
+  }
+
   const clientId = process.env.WCA_CLIENT_ID;
   const clientSecret = process.env.WCA_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -80,6 +86,7 @@ export async function GET(req: NextRequest) {
     const token = await createSession(userId);
     const res = NextResponse.redirect(new URL("/", req.url));
     res.cookies.set(SESSION_COOKIE, token, cookieOptions(30 * 24 * 60 * 60));
+    res.cookies.delete("wca_oauth_state");
     return res;
   } catch (err) {
     console.error("WCA OAuth Fehler:", err);
