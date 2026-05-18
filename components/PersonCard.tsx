@@ -219,7 +219,11 @@ function PRBadge({
     : `https://www.worldcubeassociation.org/persons/${personId}?event=${pr.eventId}`;
   const isSingle = pr.type === "single";
   const level = bravoLevel(bravoCount);
-  const record = pr.regionalRecord && pr.regionalRecord !== "PR" ? pr.regionalRecord : null;
+  const record = (pr.wr ?? 0) > 0 ? "WR"
+    : (pr.cr ?? 0) > 0 ? "CR"
+    : (pr.nr ?? 0) > 0 ? "NR"
+    : pr.regionalRecord && pr.regionalRecord !== "PR" ? pr.regionalRecord
+    : null;
 
   const typeColors = isSingle
     ? (["text-blue-500","text-blue-500","text-blue-600","text-blue-700"] as const)
