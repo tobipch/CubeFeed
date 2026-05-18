@@ -237,7 +237,7 @@ function PRBadge({
   const recordBorderStyle: React.CSSProperties = record === "WR"
     ? { border: "2px solid #f44336" }
     : record === "CR"
-    ? { border: "2px solid #fdd835" }
+    ? { border: "2px solid #ffeb3b" }
     : record === "NR"
     ? { border: "2px solid #00c853" }
     : {};
