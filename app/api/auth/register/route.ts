@@ -21,6 +21,13 @@ export async function POST(req: NextRequest) {
     }
 
     const trimmedUsername = username.trim();
+
+    if (!/^[a-zA-Z0-9_-]{3,30}$/.test(trimmedUsername)) {
+      return Response.json(
+        { error: "Benutzername darf nur Buchstaben, Zahlen, _ und - enthalten (3–30 Zeichen)." },
+        { status: 400 }
+      );
+    }
     const existing = await query(
       "SELECT id FROM users WHERE username = ?",
       [trimmedUsername]
