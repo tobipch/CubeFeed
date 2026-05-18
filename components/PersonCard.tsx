@@ -84,22 +84,10 @@ export default function PersonCard({
     );
   });
 
-  // Determine highest record level for card border
-  const allRecords = dedupedPRs.map((d) => d.pr.regionalRecord).filter(Boolean);
-  const cardBorderStyle: React.CSSProperties = allRecords.includes("WR")
-    ? { border: "3px solid #f44336" }
-    : allRecords.includes("CR")
-    ? { border: "3px solid #fdd835" }
-    : allRecords.includes("NR")
-    ? { border: "3px solid #00c853" }
-    : {};
-  const hasRecordBorder = allRecords.some((r) => r === "WR" || r === "CR" || r === "NR");
-
   return (
     <div
       id={person.personId}
-      className={`bg-white rounded-xl scroll-mt-4 overflow-hidden ${hasRecordBorder ? "" : "border border-gray-200"}`}
-      style={cardBorderStyle}
+      className="bg-white rounded-xl border border-gray-200 scroll-mt-4 overflow-hidden"
     >
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
@@ -246,10 +234,18 @@ function PRBadge({
     ? (isSingle ? "text-blue-300 hover:text-blue-500" : "text-orange-300 hover:text-orange-500")
     : "text-gray-300 hover:text-red-400";
 
+  const recordBorderStyle: React.CSSProperties = record === "WR"
+    ? { border: "2px solid #f44336" }
+    : record === "CR"
+    ? { border: "2px solid #fdd835" }
+    : record === "NR"
+    ? { border: "2px solid #00c853" }
+    : {};
+
   return (
     <div
       className={`group flex items-stretch rounded-lg w-full transition-colors overflow-hidden ${record ? "relative z-10" : ""} ${badgeColorClasses(isSingle, level)}`}
-      style={badgeInlineStyle(isSingle, level)}
+      style={{ ...badgeInlineStyle(isSingle, level), ...recordBorderStyle }}
     >
       {/* Left record stripe */}
       {record && (
@@ -364,19 +360,9 @@ function RecordHighlight({ record }: { record: string }) {
   );
 }
 
-function rankBadgeStyle(label: string): React.CSSProperties {
-  if (label === "WR") return { borderLeft: "10px solid #f44336", color: "#c62828", paddingLeft: "6px" };
-  if (label === "CR") return { borderLeft: "10px solid #fdd835", color: "#e65100", paddingLeft: "6px" };
-  if (label === "NR") return { borderLeft: "10px solid #00c853", color: "#1b5e20", paddingLeft: "6px" };
-  return {};
-}
-
 function RankBadge({ label, value }: { label: string; value: number }) {
   return (
-    <span
-      className="text-xs py-0.5 rounded font-medium"
-      style={rankBadgeStyle(label)}
-    >
+    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
       {label} {value}
     </span>
   );
