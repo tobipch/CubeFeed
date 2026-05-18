@@ -281,7 +281,7 @@ function PRBadge({
 
         {/* Row 2: time + prev (left) | records (right, wraps to next line if no room) */}
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1">
-          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 shrink-0">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 min-w-0 max-w-full">
             <span
               className="text-base font-bold text-gray-900 tabular-nums"
               style={{ fontFamily: "var(--font-dm-mono)" }}
