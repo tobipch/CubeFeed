@@ -219,9 +219,10 @@ function PRBadge({
     : `https://www.worldcubeassociation.org/persons/${personId}?event=${pr.eventId}`;
   const isSingle = pr.type === "single";
   const level = bravoLevel(bravoCount);
-  const record = (pr.wr ?? 0) > 0 ? "WR"
-    : (pr.cr ?? 0) > 0 ? "CR"
-    : (pr.nr ?? 0) > 0 ? "NR"
+  const record =
+      (pr.wr === 1 || pr.regionalRecord === "WR") ? "WR"
+    : (pr.cr === 1 || pr.regionalRecord === "CR") ? "CR"
+    : (pr.nr === 1 || pr.regionalRecord === "NR") ? "NR"
     : pr.regionalRecord && pr.regionalRecord !== "PR" ? pr.regionalRecord
     : null;
 
