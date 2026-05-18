@@ -174,9 +174,9 @@ function badgeColorClasses(isSingle: boolean, level: 0 | 1 | 2 | 3): string {
 }
 
 function recordStripe(record: string): string {
-  if (record === "WR") return "linear-gradient(90deg,#fbbf24,#f59e0b,#fbbf24)";
-  if (record === "CR") return "linear-gradient(90deg,#60a5fa,#3b82f6,#60a5fa)";
-  return "linear-gradient(90deg,#4ade80,#22c55e,#4ade80)";
+  if (record === "WR") return "linear-gradient(90deg,#f44336,#e53935,#f44336)";
+  if (record === "CR") return "linear-gradient(90deg,#ffeb3b,#fdd835,#ffeb3b)";
+  return "linear-gradient(90deg,#00e676,#00c853,#00e676)";
 }
 
 function badgeInlineStyle(
@@ -331,23 +331,40 @@ function HeartIcon({ filled }: { filled: boolean }) {
 
 function RecordHighlight({ record }: { record: string }) {
   const styles: Record<string, string> = {
-    WR: "bg-yellow-400 text-yellow-900 ring-1 ring-yellow-500",
-    CR: "bg-blue-500 text-white ring-1 ring-blue-600",
-    NR: "bg-green-500 text-white ring-1 ring-green-600",
+    WR: "text-white ring-1 ring-red-600",
+    CR: "text-gray-900 ring-1 ring-yellow-500",
+    NR: "text-white ring-1 ring-green-600",
   };
-  const style =
-    styles[record] ?? "bg-amber-100 text-amber-800 ring-1 ring-amber-300";
+  const inlineColors: Record<string, React.CSSProperties> = {
+    WR: { backgroundColor: "#f44336" },
+    CR: { backgroundColor: "#ffeb3b" },
+    NR: { backgroundColor: "#00e676" },
+  };
+  const style = styles[record] ?? "bg-amber-100 text-amber-800 ring-1 ring-amber-300";
 
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${style}`}>
+    <span
+      className={`text-xs px-2 py-0.5 rounded-full font-bold ${style}`}
+      style={inlineColors[record]}
+    >
       {record}
     </span>
   );
 }
 
+function rankBadgeStyle(label: string): React.CSSProperties {
+  if (label === "WR") return { backgroundColor: "#f44336", color: "#fff", borderColor: "#e53935" };
+  if (label === "CR") return { backgroundColor: "#ffeb3b", color: "#333", borderColor: "#fdd835" };
+  if (label === "NR") return { backgroundColor: "#00e676", color: "#fff", borderColor: "#00c853" };
+  return {};
+}
+
 function RankBadge({ label, value }: { label: string; value: number }) {
   return (
-    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-white/80 text-gray-600 border border-gray-200">
+    <span
+      className="text-xs px-1.5 py-0.5 rounded font-medium border"
+      style={rankBadgeStyle(label)}
+    >
       {label} {value}
     </span>
   );
