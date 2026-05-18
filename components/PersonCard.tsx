@@ -84,10 +84,22 @@ export default function PersonCard({
     );
   });
 
+  // Determine highest record level for card border
+  const allRecords = dedupedPRs.map((d) => d.pr.regionalRecord).filter(Boolean);
+  const cardBorderStyle: React.CSSProperties = allRecords.includes("WR")
+    ? { border: "3px solid #f44336" }
+    : allRecords.includes("CR")
+    ? { border: "3px solid #fdd835" }
+    : allRecords.includes("NR")
+    ? { border: "3px solid #00c853" }
+    : {};
+  const hasRecordBorder = allRecords.some((r) => r === "WR" || r === "CR" || r === "NR");
+
   return (
     <div
       id={person.personId}
-      className="bg-white rounded-xl border border-gray-200 scroll-mt-4 overflow-hidden"
+      className={`bg-white rounded-xl scroll-mt-4 overflow-hidden ${hasRecordBorder ? "" : "border border-gray-200"}`}
+      style={cardBorderStyle}
     >
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
@@ -241,7 +253,7 @@ function PRBadge({
     >
       {/* Left record stripe */}
       {record && (
-        <div className="w-[4px] self-stretch shrink-0" style={{ background: recordStripe(record) }} />
+        <div className="w-[10px] self-stretch shrink-0" style={{ background: recordStripe(record) }} />
       )}
 
       {/* Main link */}
@@ -353,16 +365,16 @@ function RecordHighlight({ record }: { record: string }) {
 }
 
 function rankBadgeStyle(label: string): React.CSSProperties {
-  if (label === "WR") return { backgroundColor: "#f44336", color: "#fff", borderColor: "#e53935" };
-  if (label === "CR") return { backgroundColor: "#ffeb3b", color: "#333", borderColor: "#fdd835" };
-  if (label === "NR") return { backgroundColor: "#00e676", color: "#fff", borderColor: "#00c853" };
+  if (label === "WR") return { borderLeft: "10px solid #f44336", color: "#c62828", paddingLeft: "6px" };
+  if (label === "CR") return { borderLeft: "10px solid #fdd835", color: "#e65100", paddingLeft: "6px" };
+  if (label === "NR") return { borderLeft: "10px solid #00c853", color: "#1b5e20", paddingLeft: "6px" };
   return {};
 }
 
 function RankBadge({ label, value }: { label: string; value: number }) {
   return (
     <span
-      className="text-xs px-1.5 py-0.5 rounded font-medium border"
+      className="text-xs py-0.5 rounded font-medium"
       style={rankBadgeStyle(label)}
     >
       {label} {value}
