@@ -219,7 +219,12 @@ function PRBadge({
     : `https://www.worldcubeassociation.org/persons/${personId}?event=${pr.eventId}`;
   const isSingle = pr.type === "single";
   const level = bravoLevel(bravoCount);
-  const record = pr.regionalRecord && pr.regionalRecord !== "PR" ? pr.regionalRecord : null;
+  const record =
+      (pr.wr === 1 || pr.regionalRecord === "WR") ? "WR"
+    : (pr.cr === 1 || pr.regionalRecord === "CR") ? "CR"
+    : (pr.nr === 1 || pr.regionalRecord === "NR") ? "NR"
+    : pr.regionalRecord && pr.regionalRecord !== "PR" ? pr.regionalRecord
+    : null;
 
   const typeColors = isSingle
     ? (["text-blue-500","text-blue-500","text-blue-600","text-blue-700"] as const)
@@ -237,7 +242,7 @@ function PRBadge({
   const recordBorderStyle: React.CSSProperties = record === "WR"
     ? { border: "2px solid #f44336" }
     : record === "CR"
-    ? { border: "2px solid #fdd835" }
+    ? { border: "2px solid #ffeb3b" }
     : record === "NR"
     ? { border: "2px solid #00c853" }
     : {};
