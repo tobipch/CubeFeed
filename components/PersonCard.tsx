@@ -260,7 +260,7 @@ function PRBadge({
         className="flex-1 px-3 py-2 min-w-0"
       >
         {/* Row 1: icon + event + type (left) | competition name (right, truncated) */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <div className="flex items-center gap-1 shrink-0">
             <span
               className={`cubing-icon event-${pr.eventId} opacity-60 shrink-0`}
@@ -281,7 +281,7 @@ function PRBadge({
 
         {/* Row 2: time + prev (left) | records (right, wraps to next line if no room) */}
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1">
-          <div className="flex items-baseline gap-1.5 shrink-0">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 shrink-0">
             <span
               className="text-base font-bold text-gray-900 tabular-nums"
               style={{ fontFamily: "var(--font-dm-mono)" }}
@@ -290,7 +290,7 @@ function PRBadge({
             </span>
             {prevTime !== undefined && (
               <span className="text-xs text-gray-400 font-mono tabular-nums">
-                before {formatTime(prevTime, pr.eventId, pr.type)}
+                (before {formatTime(prevTime, pr.eventId, pr.type)})
               </span>
             )}
           </div>
@@ -309,7 +309,7 @@ function PRBadge({
           e.stopPropagation();
           onBravo?.();
         }}
-        className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
+        className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-2 sm:px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
         aria-label={isLiked ? "Remove bravo" : "Give bravo"}
       >
         <HeartIcon filled={isLiked} />
