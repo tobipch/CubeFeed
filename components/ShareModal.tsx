@@ -31,7 +31,7 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
     const el = shareCardRef.current;
     if (!el) return;
 
-    // Wait one tick so the card is fully painted
+    // Small delay so the card is fully painted before capture
     const timeout = setTimeout(async () => {
       try {
         const result = await generateShareImage(el);
@@ -41,10 +41,10 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
         setImageUrl(url);
         setState("ready");
       } catch {
-        setErrorMsg("Bild konnte nicht erstellt werden.");
+        setErrorMsg("Could not create image.");
         setState("error");
       }
-    }, 100);
+    }, 150);
 
     return () => clearTimeout(timeout);
   }, []);
@@ -72,7 +72,7 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
       const file = new File([blob], "cubefeed-pr.png", { type: "image/png" });
       await navigator.share({
         files: [file],
-        title: `${person.personName} – neue Bestzeiten`,
+        title: `${person.personName} – new personal bests`,
       });
     } catch {
       // User cancelled or share failed — not an error
@@ -133,12 +133,12 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
           {/* Modal header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">Ergebnis teilen</h2>
+            <h2 className="text-base font-semibold text-gray-900">Share result</h2>
             <button
               type="button"
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 leading-none text-xl"
-              aria-label="Schließen"
+              aria-label="Close"
             >
               ×
             </button>
@@ -157,7 +157,7 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
                 >
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                 </svg>
-                <span className="text-sm">Bild wird erstellt…</span>
+                <span className="text-sm">Creating image…</span>
               </div>
             )}
 
@@ -170,7 +170,7 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
             {isReady && imageUrl && (
               <img
                 src={imageUrl}
-                alt="Vorschau"
+                alt="Preview"
                 className="w-full rounded-lg border border-gray-200 object-contain"
               />
             )}
@@ -187,7 +187,7 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
                   className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-xl text-sm transition-colors"
                 >
                   <ShareIcon />
-                  {state === "sharing" ? "Teilen…" : "Teilen"}
+                  {state === "sharing" ? "Sharing…" : "Share"}
                 </button>
               )}
 
@@ -200,12 +200,12 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
                   {state === "copied" ? (
                     <>
                       <CheckIcon />
-                      Kopiert!
+                      Copied!
                     </>
                   ) : (
                     <>
                       <CopyIcon />
-                      Kopieren
+                      Copy image
                     </>
                   )}
                 </button>
@@ -224,7 +224,7 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
               {!canNativeShare && (
                 <div className="flex gap-2 pt-1">
                   <a
-                    href={`https://wa.me/?text=${encodeURIComponent(`${person.personName} hat neue Bestzeiten! 🎉`)}`}
+                    href={`https://wa.me/?text=${encodeURIComponent(`${person.personName} set new personal bests! 🎉`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-green-50 hover:border-green-200 text-gray-600 hover:text-green-700 py-2 rounded-xl text-sm transition-colors"
@@ -233,7 +233,7 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
                     WhatsApp
                   </a>
                   <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://cubefeed.app")}&quote=${encodeURIComponent(`${person.personName} hat neue Bestzeiten!`)}`}
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://cubefeed.tobip.ch")}&quote=${encodeURIComponent(`${person.personName} set new personal bests!`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-blue-50 hover:border-blue-200 text-gray-600 hover:text-blue-700 py-2 rounded-xl text-sm transition-colors"

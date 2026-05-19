@@ -1,7 +1,7 @@
 "use client";
 
 import type { PersonPRs, PR } from "@/lib/queries";
-import { eventName, EVENT_ORDER, typeLabel, MEAN_EVENTS } from "@/lib/events";
+import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
 
 interface Props {
@@ -15,7 +15,7 @@ interface DedupedPR {
   prevTime?: number;
 }
 
-function recordLabel(pr: PR): string | null {
+function recordLabel(pr: PR): "WR" | "CR" | "NR" | string | null {
   if (pr.wr === 1 || pr.regionalRecord === "WR") return "WR";
   if (pr.cr === 1 || pr.regionalRecord === "CR") return "CR";
   if (pr.nr === 1 || pr.regionalRecord === "NR") return "NR";
@@ -29,14 +29,6 @@ function recordStripeColor(record: string): string {
   return "#00c853";
 }
 
-function rankBadgeStyle(label: string): React.CSSProperties {
-  if (label === "WR") return { background: "#f44336", color: "#fff" };
-  if (label === "CR") return { background: "#fdd835", color: "#333" };
-  if (label === "NR") return { background: "#00c853", color: "#fff" };
-  return { background: "#e5e7eb", color: "#374151" };
-}
-
-// Deduplicate PRs same as PersonCard
 function dedupePRs(prs: PR[]): DedupedPR[] {
   const byEventType = new Map<string, PR[]>();
   for (const pr of prs) {
@@ -59,6 +51,41 @@ function dedupePRs(prs: PR[]): DedupedPR[] {
   }
   return result;
 }
+
+const BADGE_BASE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  borderRadius: 10,
+  overflow: "hidden",
+  marginBottom: 0,
+};
+
+const RANK_BADGE: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  padding: "2px 7px",
+  borderRadius: 9999,
+  lineHeight: 1,
+  fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+  letterSpacing: "0.02em",
+};
+
+const GRAY_BADGE: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 11,
+  fontWeight: 500,
+  padding: "2px 6px",
+  borderRadius: 4,
+  background: "#f3f4f6",
+  color: "#374151",
+  lineHeight: 1,
+  fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+};
 
 export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
   const dedupedPRs = dedupePRs(person.prs);
@@ -83,28 +110,34 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
     );
   });
 
-  const today = new Date().toLocaleDateString("de-CH", {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+  });
+  const timeStr = now.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
   return (
     <div
       style={{
-        width: 800,
+        width: 760,
         background: "#f9fafb",
-        padding: 24,
+        padding: 20,
         fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
       }}
     >
       {/* Card */}
       <div
         style={{
-          background: "#fff",
+          background: "#ffffff",
           borderRadius: 16,
           border: "1px solid #e5e7eb",
           overflow: "hidden",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.07)",
         }}
       >
         {/* Header */}
@@ -113,14 +146,29 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
             display: "flex",
             alignItems: "center",
             gap: 10,
-            padding: "12px 16px",
+            padding: "12px 18px",
             borderBottom: "1px solid #f3f4f6",
           }}
         >
-          <span style={{ fontWeight: 700, fontSize: 17, color: "#111827", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: 18,
+              color: "#111827",
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
             {person.personName}
           </span>
-          <span style={{ fontSize: 12, color: "#9ca3af", fontFamily: "monospace", flexShrink: 0 }}>
+          <span
+            style={{
+              fontSize: 12,
+              color: "#9ca3af",
+              fontFamily: "ui-monospace, monospace",
+              flexShrink: 0,
+            }}
+          >
             {person.personId}
           </span>
           {avatarProxyUrl && (
@@ -130,8 +178,8 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
               alt={person.personName}
               crossOrigin="anonymous"
               style={{
-                width: 44,
-                height: 44,
+                width: 46,
+                height: 46,
                 borderRadius: "50%",
                 objectFit: "cover",
                 border: "1px solid #e5e7eb",
@@ -142,7 +190,7 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
         </div>
 
         {/* PR rows */}
-        <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ padding: "12px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
           {eventGroups.map(([eventId, items]) =>
             items.map((item, i) => {
               const pr = item.pr;
@@ -152,28 +200,27 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
               const bravoCount = bravos?.[bravoKey] ?? 0;
 
               const bgColor = isSingle ? "#eff6ff" : "#fff7ed";
-              const borderColor = isSingle ? "#bfdbfe" : "#fed7aa";
-              const timeColor = isSingle ? "#1d4ed8" : "#c2410c";
+              const borderColor = record
+                ? recordStripeColor(record)
+                : isSingle
+                ? "#bfdbfe"
+                : "#fed7aa";
+              const borderWidth = record ? 2 : 1;
 
               return (
                 <div
                   key={`${eventId}-${pr.type}-${i}`}
                   style={{
-                    display: "flex",
-                    alignItems: "stretch",
-                    borderRadius: 8,
-                    border: record
-                      ? `2px solid ${recordStripeColor(record)}`
-                      : `1px solid ${borderColor}`,
+                    ...BADGE_BASE,
+                    border: `${borderWidth}px solid ${borderColor}`,
                     background: bgColor,
-                    overflow: "hidden",
                   }}
                 >
                   {/* Record stripe */}
                   {record && (
                     <div
                       style={{
-                        width: 8,
+                        width: 9,
                         flexShrink: 0,
                         background: recordStripeColor(record),
                       }}
@@ -181,58 +228,126 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
                   )}
 
                   {/* Content */}
-                  <div style={{ flex: 1, padding: "8px 12px", minWidth: 0 }}>
-                    {/* Row 1 */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#374151", flexShrink: 0 }}>
+                  <div style={{ flex: 1, padding: "9px 13px", minWidth: 0 }}>
+                    {/* Row 1: icon + event name + type + competition */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 7,
+                        flexWrap: "wrap",
+                        rowGap: 2,
+                      }}
+                    >
+                      {/* Cubing icon — uses the already-loaded CDN CSS */}
+                      <span
+                        className={`cubing-icon event-${eventId}`}
+                        aria-hidden="true"
+                        style={{ fontSize: 14, opacity: 0.65, flexShrink: 0, lineHeight: 1 }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "#374151",
+                          flexShrink: 0,
+                        }}
+                      >
                         {eventName(eventId)}
                       </span>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: isSingle ? "#3b82f6" : "#f97316", flexShrink: 0 }}>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: isSingle ? "#3b82f6" : "#f97316",
+                          flexShrink: 0,
+                        }}
+                      >
                         {typeLabel(eventId, pr.type)}
                       </span>
-                      <span style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          wordBreak: "break-word",
+                        }}
+                      >
                         {pr.competitionName}
                       </span>
                     </div>
 
-                    {/* Row 2 */}
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 18, fontWeight: 700, color: "#111827", fontVariantNumeric: "tabular-nums", fontFamily: "ui-monospace, monospace" }}>
+                    {/* Row 2: time + prev + rank badges */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginTop: 4,
+                        flexWrap: "wrap",
+                        rowGap: 3,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 20,
+                          fontWeight: 800,
+                          color: "#111827",
+                          fontVariantNumeric: "tabular-nums",
+                          fontFamily: "ui-monospace, monospace",
+                          lineHeight: 1,
+                        }}
+                      >
                         {formatTime(pr.time, pr.eventId, pr.type)}
                       </span>
                       {item.prevTime !== undefined && (
-                        <span style={{ fontSize: 11, color: "#9ca3af", fontFamily: "monospace" }}>
-                          (vorher {formatTime(item.prevTime, pr.eventId, pr.type)})
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#9ca3af",
+                            fontFamily: "ui-monospace, monospace",
+                          }}
+                        >
+                          (before {formatTime(item.prevTime, pr.eventId, pr.type)})
                         </span>
                       )}
-                      <div style={{ display: "flex", gap: 4, marginLeft: "auto", flexShrink: 0, flexWrap: "wrap" }}>
+
+                      {/* Rank badges — pushed to right */}
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          marginLeft: "auto",
+                          flexShrink: 0,
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                        }}
+                      >
                         {record && (
                           <span
                             style={{
-                              ...rankBadgeStyle(record),
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: "1px 7px",
-                              borderRadius: 9999,
+                              ...RANK_BADGE,
+                              background:
+                                record === "WR"
+                                  ? "#f44336"
+                                  : record === "CR"
+                                  ? "#fdd835"
+                                  : "#00c853",
+                              color:
+                                record === "WR" || record === "NR" ? "#fff" : "#333",
                             }}
                           >
                             {record}
                           </span>
                         )}
                         {(pr.nr ?? 0) > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 500, padding: "1px 6px", borderRadius: 4, background: "#f3f4f6", color: "#374151" }}>
-                            NR {pr.nr}
-                          </span>
+                          <span style={GRAY_BADGE}>NR&nbsp;{pr.nr}</span>
                         )}
                         {(pr.cr ?? 0) > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 500, padding: "1px 6px", borderRadius: 4, background: "#f3f4f6", color: "#374151" }}>
-                            CR {pr.cr}
-                          </span>
+                          <span style={GRAY_BADGE}>CR&nbsp;{pr.cr}</span>
                         )}
                         {(pr.wr ?? 0) > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 500, padding: "1px 6px", borderRadius: 4, background: "#f3f4f6", color: "#374151" }}>
-                            WR {pr.wr}
-                          </span>
+                          <span style={GRAY_BADGE}>WR&nbsp;{pr.wr}</span>
                         )}
                       </div>
                     </div>
@@ -248,15 +363,29 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
                         justifyContent: "center",
                         gap: 2,
                         padding: "0 14px",
-                        borderLeft: `1px solid ${borderColor}`,
+                        borderLeft: `1px solid ${isSingle ? "#bfdbfe" : "#fed7aa"}`,
                         flexShrink: 0,
                         color: "#f87171",
                       }}
                     >
-                      <svg viewBox="0 0 24 24" style={{ width: 16, height: 16 }} fill="currentColor" stroke="none">
+                      <svg
+                        viewBox="0 0 24 24"
+                        style={{ width: 15, height: 15 }}
+                        fill="currentColor"
+                        stroke="none"
+                      >
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                       </svg>
-                      <span style={{ fontSize: 11, color: "#f87171" }}>{bravoCount}</span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "#f87171",
+                          fontFamily: "ui-sans-serif, sans-serif",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {bravoCount}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -271,16 +400,30 @@ export default function ShareCard({ person, bravos, avatarProxyUrl }: Props) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "8px 16px",
+            padding: "8px 18px",
             borderTop: "1px solid #f3f4f6",
             background: "#f9fafb",
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", letterSpacing: "0.05em" }}>
-            cubefeed.app
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#6b7280",
+              letterSpacing: "0.03em",
+              fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            }}
+          >
+            🏆 CubeFeed · cubefeed.tobip.ch
           </span>
-          <span style={{ fontSize: 11, color: "#d1d5db" }}>
-            {today}
+          <span
+            style={{
+              fontSize: 11,
+              color: "#9ca3af",
+              fontFamily: "ui-monospace, monospace",
+            }}
+          >
+            {dateStr} · {timeStr}
           </span>
         </div>
       </div>

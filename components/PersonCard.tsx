@@ -29,6 +29,7 @@ export default function PersonCard({
 }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
+  const [sharePR, setSharePR] = useState<PR | null>(null);
 
   useEffect(() => {
     fetch(`https://www.worldcubeassociation.org/api/v0/persons/${person.personId}`)
@@ -57,8 +58,6 @@ export default function PersonCard({
       return a.time - b.time;
     });
     const current = sorted[0];
-    // Only use a displaced entry as prevTime if it's from a different competition;
-    // same-competition entries are just duplicate rounds with the same best time.
     const prevTime =
       sorted.length > 1 && sorted[1].competitionId !== sorted[0].competitionId
         ? sorted[1].time
@@ -87,6 +86,30 @@ export default function PersonCard({
     );
   });
 
+  // Build the person data to share — either all PRs or just the selected one
+  const sharePersonData: PersonPRs = sharePR
+    ? {
+        ...person,
+        prs: person.prs.filter(
+          (p) =>
+            p.eventId === sharePR.eventId &&
+            p.type === sharePR.type &&
+            p.time === sharePR.time &&
+            p.competitionId === sharePR.competitionId,
+        ),
+      }
+    : person;
+
+  function openShare(pr: PR | null) {
+    setSharePR(pr);
+    setShowShare(true);
+  }
+
+  function closeShare() {
+    setShowShare(false);
+    setSharePR(null);
+  }
+
   return (
     <div
       id={person.personId}
@@ -108,11 +131,11 @@ export default function PersonCard({
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => setShowShare(true)}
+            onClick={() => openShare(null)}
             className="text-gray-300 hover:text-gray-500 transition-colors shrink-0"
-            aria-label="Ergebnis teilen"
+            aria-label="Share results"
           >
-            <UploadIcon />
+            <ShareIcon className="w-4 h-4" />
           </button>
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -130,10 +153,10 @@ export default function PersonCard({
       {showShare && (
         <Suspense fallback={null}>
           <ShareModal
-            person={person}
+            person={sharePersonData}
             bravos={bravos}
             avatarUrl={avatarUrl ?? undefined}
-            onClose={() => setShowShare(false)}
+            onClose={closeShare}
           />
         </Suspense>
       )}
@@ -162,6 +185,7 @@ export default function PersonCard({
                         ? () => onBravo(person.personId, item.pr.eventId, item.pr.type, item.pr.time)
                         : undefined
                     }
+                    onShare={() => openShare(item.pr)}
                   />
                 );
               })}
@@ -228,6 +252,7 @@ function PRBadge({
   bravoCount = 0,
   isLiked = false,
   onBravo,
+  onShare,
 }: {
   pr: PR;
   personId: string;
@@ -235,6 +260,7 @@ function PRBadge({
   bravoCount?: number;
   isLiked?: boolean;
   onBravo?: () => void;
+  onShare?: () => void;
 }) {
   const href = pr.liveUrl
     ? pr.liveUrl
@@ -329,21 +355,30 @@ function PRBadge({
         </div>
       </a>
 
-      {/* Divider + heart — entire area is clickable */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onBravo?.();
-        }}
-        className={`flex flex-col items-center justify-center gap-0.5 border-l ${dividerColor} px-2 sm:px-4 shrink-0 self-stretch transition-colors ${heartColor}`}
-        aria-label={isLiked ? "Remove bravo" : "Give bravo"}
-      >
-        <HeartIcon filled={isLiked} />
-        {bravoCount > 0 && (
-          <span className="text-xs leading-none">{bravoCount}</span>
+      {/* Right panel: share (optional) + heart */}
+      <div className={`flex flex-col items-stretch border-l ${dividerColor} shrink-0 self-stretch`}>
+        {onShare && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onShare(); }}
+            className={`flex items-center justify-center flex-1 px-2.5 sm:px-3.5 text-gray-300 hover:text-gray-500 transition-colors border-b ${dividerColor}`}
+            aria-label="Share this PR"
+          >
+            <ShareIcon className="w-3.5 h-3.5" />
+          </button>
         )}
-      </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onBravo?.(); }}
+          className={`flex flex-col items-center justify-center gap-0.5 flex-1 px-2.5 sm:px-4 transition-colors ${heartColor}`}
+          aria-label={isLiked ? "Remove bravo" : "Give bravo"}
+        >
+          <HeartIcon filled={isLiked} />
+          {bravoCount > 0 && (
+            <span className="text-xs leading-none">{bravoCount}</span>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -364,51 +399,30 @@ function HeartIcon({ filled }: { filled: boolean }) {
   );
 }
 
-function RecordHighlight({ record }: { record: string }) {
-  const styles: Record<string, string> = {
-    WR: "text-white ring-1 ring-red-600",
-    CR: "text-gray-900 ring-1 ring-yellow-500",
-    NR: "text-white ring-1 ring-green-600",
-  };
-  const inlineColors: Record<string, React.CSSProperties> = {
-    WR: { backgroundColor: "#f44336" },
-    CR: { backgroundColor: "#ffeb3b" },
-    NR: { backgroundColor: "#00e676" },
-  };
-  const style = styles[record] ?? "bg-amber-100 text-amber-800 ring-1 ring-amber-300";
-
-  return (
-    <span
-      className={`text-xs px-2 py-0.5 rounded-full font-bold ${style}`}
-      style={inlineColors[record]}
-    >
-      {record}
-    </span>
-  );
-}
-
-function RankBadge({ label, value }: { label: string; value: number }) {
-  return (
-    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
-      {label} {value}
-    </span>
-  );
-}
-
-function UploadIcon() {
+function ShareIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="w-4 h-4 shrink-0"
+      className={className ?? "w-4 h-4"}
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-      <polyline points="16 6 12 2 8 6" />
-      <line x1="12" y1="2" x2="12" y2="15" />
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
     </svg>
+  );
+}
+
+function RankBadge({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600 tabular-nums">
+      {label} {value}
+    </span>
   );
 }
