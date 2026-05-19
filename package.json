@@ -11,10 +11,11 @@
     "db:import": "tsx scripts/import-wca.ts"
   },
   "dependencies": {
+    "@fontsource/dm-mono": "^5.2.7",
     "@types/bcryptjs": "^2.4.6",
     "adm-zip": "^0.5.16",
     "bcryptjs": "^3.0.3",
-    "html2canvas": "^1.4.1",
+    "geist": "^1.7.0",
     "mysql2": "^3.22.3",
     "next": "^15.0.0",
     "react": "^19.0.0",
@@ -22,7 +23,6 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",
-    "@types/html2canvas": "^0.5.35",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

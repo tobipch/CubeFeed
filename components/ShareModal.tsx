@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PersonPRs } from "@/lib/queries";
-import ShareCard from "./ShareCard";
-import { generateShareImage } from "@/lib/generateShareImage";
 
 type ShareState = "generating" | "ready" | "sharing" | "copied" | "error";
 
@@ -19,66 +17,41 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  // Pre-fetched avatar as a blob URL (same-origin) so html2canvas can use it
-  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
-  const [avatarReady, setAvatarReady] = useState(!avatarUrl);
-  const shareCardRef = useRef<HTMLDivElement>(null);
-  const outputBlobUrlRef = useRef<string | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
-  // Step 1: pre-fetch avatar via proxy → base64 data URL so html2canvas
-  // can embed it directly without any network request
+  // Generate image via server-side API (Satori / next/og)
   useEffect(() => {
-    if (!avatarUrl) return;
-    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(avatarUrl)}`;
-    fetch(proxyUrl)
-      .then((r) => (r.ok ? r.blob() : Promise.reject()))
-      .then(
-        (imgBlob) =>
-          new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(imgBlob);
-          }),
-      )
-      .then((dataUrl) => {
-        setAvatarDataUrl(dataUrl);
-        setAvatarReady(true);
-      })
-      .catch(() => setAvatarReady(true)); // proceed without avatar on error
-  }, [avatarUrl]);
-
-  // Step 2: once avatar is ready, wait a tick for the card to paint, then capture
-  useEffect(() => {
-    if (!avatarReady) return;
-    const el = shareCardRef.current;
-    if (!el) return;
-
-    const timeout = setTimeout(async () => {
+    let cancelled = false;
+    async function generate() {
       try {
-        const result = await generateShareImage(el);
+        const res = await fetch("/api/share-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ person, bravos, avatarUrl }),
+        });
+        if (!res.ok) throw new Error(`API error ${res.status}`);
+        const result = await res.blob();
+        if (cancelled) return;
         const url = URL.createObjectURL(result);
-        outputBlobUrlRef.current = url;
+        blobUrlRef.current = url;
         setBlob(result);
         setImageUrl(url);
         setState("ready");
       } catch {
-        setErrorMsg("Could not create image.");
-        setState("error");
+        if (!cancelled) {
+          setErrorMsg("Could not create image.");
+          setState("error");
+        }
       }
-    }, 120);
+    }
+    generate();
+    return () => { cancelled = true; };
+  }, [person, bravos, avatarUrl]);
 
-    return () => clearTimeout(timeout);
-  }, [avatarReady]);
-
-  // Revoke output blob URL on unmount (avatar is data URL, no revocation needed)
   useEffect(() => {
-    return () => {
-      if (outputBlobUrlRef.current) URL.revokeObjectURL(outputBlobUrlRef.current);
-    };
+    return () => { if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current); };
   }, []);
 
-  // Close on Escape
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handleKey);
@@ -90,12 +63,10 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
     setState("sharing");
     try {
       const ts = new Date().toISOString().slice(0, 16).replace("T", "_").replace(":", "-");
-      const file = new File([blob], `cubefeed-${person.personId}-${ts}.png`, {
-        type: "image/png",
-      });
+      const file = new File([blob], `cubefeed-${person.personId}-${ts}.png`, { type: "image/png" });
       await navigator.share({ files: [file], title: `${person.personName} – new personal bests` });
     } catch {
-      // User cancelled — not an error
+      // cancelled by user
     } finally {
       setState("ready");
     }
@@ -133,118 +104,89 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
   const isReady = state === "ready" || state === "copied" || state === "sharing";
 
   return (
-    <>
-      {/* Hidden ShareCard — rendered off-screen for screenshot */}
-      <div
-        aria-hidden="true"
-        style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}
-      >
-        <div ref={shareCardRef}>
-          <ShareCard person={person} bravos={bravos} avatarDataUrl={avatarDataUrl} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900">Share result</h2>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 leading-none text-xl" aria-label="Close">×</button>
         </div>
-      </div>
 
-      {/* Modal */}
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      >
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">Share result</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 leading-none text-xl"
-              aria-label="Close"
-            >
-              ×
-            </button>
-          </div>
-
-          {/* Preview */}
-          <div className="px-5 pt-4 pb-3">
-            {isLoading && (
-              <div className="flex flex-col items-center justify-center gap-2 h-36 text-gray-400">
-                <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                </svg>
-                <span className="text-sm">Creating image…</span>
-              </div>
-            )}
-            {state === "error" && (
-              <div className="flex flex-col items-center justify-center gap-2 h-36 text-red-500">
-                <span className="text-sm">{errorMsg}</span>
-              </div>
-            )}
-            {isReady && imageUrl && (
-              <img src={imageUrl} alt="Preview" className="w-full rounded-lg border border-gray-200 object-contain" />
-            )}
-          </div>
-
-          {/* Actions */}
-          {isReady && (
-            <div className="px-5 pb-5 flex flex-col gap-2">
-              {canNativeShare && (
-                <button
-                  type="button"
-                  onClick={handleNativeShare}
-                  disabled={state === "sharing"}
-                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-xl text-sm transition-colors"
-                >
-                  <NativeShareIcon />
-                  {state === "sharing" ? "Sharing…" : "Share"}
-                </button>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium py-2 rounded-xl text-sm transition-colors"
-                >
-                  {state === "copied" ? (
-                    <><CheckIcon /> Copied!</>
-                  ) : (
-                    <><CopyIcon /> Copy image</>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium py-2 rounded-xl text-sm transition-colors"
-                >
-                  <DownloadIcon /> Download
-                </button>
-              </div>
-
-              {/* Desktop social fallbacks */}
-              {!canNativeShare && (
-                <div className="flex gap-2 pt-1">
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(`${person.personName} set new personal bests! 🎉`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-green-50 hover:border-green-200 text-gray-600 hover:text-green-700 py-2 rounded-xl text-sm transition-colors"
-                  >
-                    <WhatsAppIcon /> WhatsApp
-                  </a>
-                  <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://cubefeed.tobip.ch")}&quote=${encodeURIComponent(`${person.personName} set new personal bests!`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-blue-50 hover:border-blue-200 text-gray-600 hover:text-blue-700 py-2 rounded-xl text-sm transition-colors"
-                  >
-                    <FacebookIcon /> Facebook
-                  </a>
-                </div>
-              )}
+        {/* Preview */}
+        <div className="px-5 pt-4 pb-3">
+          {isLoading && (
+            <div className="flex flex-col items-center justify-center gap-2 h-36 text-gray-400">
+              <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              <span className="text-sm">Creating image…</span>
             </div>
           )}
+          {state === "error" && (
+            <div className="flex flex-col items-center justify-center gap-2 h-36 text-red-500">
+              <span className="text-sm">{errorMsg}</span>
+            </div>
+          )}
+          {isReady && imageUrl && (
+            <img src={imageUrl} alt="Preview" className="w-full rounded-lg border border-gray-200 object-contain" />
+          )}
         </div>
+
+        {/* Actions */}
+        {isReady && (
+          <div className="px-5 pb-5 flex flex-col gap-2">
+            {canNativeShare && (
+              <button
+                type="button"
+                onClick={handleNativeShare}
+                disabled={state === "sharing"}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-xl text-sm transition-colors"
+              >
+                <NativeShareIcon />
+                {state === "sharing" ? "Sharing…" : "Share"}
+              </button>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium py-2 rounded-xl text-sm transition-colors"
+              >
+                {state === "copied" ? <><CheckIcon /> Copied!</> : <><CopyIcon /> Copy image</>}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium py-2 rounded-xl text-sm transition-colors"
+              >
+                <DownloadIcon /> Download
+              </button>
+            </div>
+            {!canNativeShare && (
+              <div className="flex gap-2 pt-1">
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`${person.personName} set new personal bests! 🎉`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-green-50 hover:border-green-200 text-gray-600 hover:text-green-700 py-2 rounded-xl text-sm transition-colors"
+                >
+                  <WhatsAppIcon /> WhatsApp
+                </a>
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://cubefeed.tobip.ch")}&quote=${encodeURIComponent(`${person.personName} set new personal bests!`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-blue-50 hover:border-blue-200 text-gray-600 hover:text-blue-700 py-2 rounded-xl text-sm transition-colors"
+                >
+                  <FacebookIcon /> Facebook
+                </a>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -256,7 +198,6 @@ function NativeShareIcon() {
     </svg>
   );
 }
-
 function CopyIcon() {
   return (
     <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -265,7 +206,6 @@ function CopyIcon() {
     </svg>
   );
 }
-
 function CheckIcon() {
   return (
     <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
@@ -273,7 +213,6 @@ function CheckIcon() {
     </svg>
   );
 }
-
 function DownloadIcon() {
   return (
     <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -282,7 +221,6 @@ function DownloadIcon() {
     </svg>
   );
 }
-
 function WhatsAppIcon() {
   return (
     <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
@@ -290,7 +228,6 @@ function WhatsAppIcon() {
     </svg>
   );
 }
-
 function FacebookIcon() {
   return (
     <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">

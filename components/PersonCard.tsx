@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
-
-const ShareModal = lazy(() => import("./ShareModal"));
+import ShareModal from "./ShareModal";
 
 interface Props {
   person: PersonPRs;
@@ -151,14 +150,12 @@ export default function PersonCard({
       </div>
 
       {showShare && (
-        <Suspense fallback={null}>
-          <ShareModal
-            person={sharePersonData}
-            bravos={bravos}
-            avatarUrl={avatarUrl ?? undefined}
-            onClose={closeShare}
-          />
-        </Suspense>
+        <ShareModal
+          person={sharePersonData}
+          bravos={bravos}
+          avatarUrl={avatarUrl ?? undefined}
+          onClose={closeShare}
+        />
       )}
 
       {/* Badge list */}
