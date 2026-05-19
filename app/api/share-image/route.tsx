@@ -1,4 +1,4 @@
-export const runtime = "nodejs";
+export const runtime = "edge";
 
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
@@ -104,20 +104,8 @@ export async function POST(req: NextRequest) {
     fetch(`${CDN}/@fontsource/dm-mono@5.2.7/files/dm-mono-latin-400-normal.woff2`).then((r) => r.arrayBuffer()),
   ]);
 
-  // Fetch avatar server-side → base64 data URL
-  let avatarSrc: string | null = null;
-  if (avatarUrl) {
-    try {
-      const res = await fetch(avatarUrl);
-      if (res.ok) {
-        const buf = await res.arrayBuffer();
-        const mime = res.headers.get("content-type") ?? "image/jpeg";
-        avatarSrc = `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
-      }
-    } catch {
-      // proceed without avatar
-    }
-  }
+  // Satori fetches external images by URL — no base64 conversion needed
+  const avatarSrc = avatarUrl ?? null;
 
   const dedupedPRs = dedupePRs(person.prs);
   const eventGroups = groupAndSort(dedupedPRs);
