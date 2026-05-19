@@ -116,12 +116,9 @@ export async function POST(req: NextRequest) {
   const imgHeight = OUTER_PAD * 2 + HEADER_H + badgeAreaH + FOOTER_H;
 
   const now = new Date();
-  const dateStr = now.toLocaleDateString("de-CH", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  const timeStr = now.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateStr = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
   // Flatten badge list — Satori does not handle nested arrays from .map inside .map
   const badges = eventGroups.flatMap(([eventId, items]) =>
@@ -369,7 +366,7 @@ export async function POST(req: NextRequest) {
                       color: "#f87171",
                     }}
                   >
-                    <span style={{ fontSize: 15, lineHeight: 1 }}>{"♥"}</span>
+                    <span style={{ fontSize: 13, lineHeight: 1, color: "#f87171" }}>{"♡"}</span>
                     <span style={{ fontSize: 11, lineHeight: 1 }}>{bravoCount}</span>
                   </div>
                 )}
@@ -390,7 +387,7 @@ export async function POST(req: NextRequest) {
             }}
           >
             <span style={{ fontSize: 11, color: "#9ca3af" }}>
-              🏆 CubeFeed · cubefeed.tobip.ch
+              CubeFeed · cubefeed.tobip.ch
             </span>
             <span
               style={{
