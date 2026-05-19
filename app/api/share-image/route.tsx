@@ -2,23 +2,9 @@ export const runtime = "nodejs";
 
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
-import { readFileSync } from "fs";
-import { join } from "path";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
-
-// ---------- fonts — read from public/fonts (always included in Vercel bundle) ----------
-
-const geistRegular = readFileSync(
-  join(process.cwd(), "public/fonts/Geist-Regular.woff2"),
-);
-const geistSemiBold = readFileSync(
-  join(process.cwd(), "public/fonts/Geist-SemiBold.woff2"),
-);
-const dmMono = readFileSync(
-  join(process.cwd(), "public/fonts/dm-mono-latin-400-normal.woff2"),
-);
 
 // ---------- data helpers (mirrors PersonCard logic) ----------
 
@@ -109,6 +95,14 @@ export async function POST(req: NextRequest) {
     bravos?: Record<string, number>;
     avatarUrl?: string;
   };
+
+  // Fetch fonts from public/ via HTTP — works on any runtime, no filesystem needed
+  const origin = new URL(req.url).origin;
+  const [geistRegular, geistSemiBold, dmMono] = await Promise.all([
+    fetch(`${origin}/fonts/Geist-Regular.woff2`).then((r) => r.arrayBuffer()),
+    fetch(`${origin}/fonts/Geist-SemiBold.woff2`).then((r) => r.arrayBuffer()),
+    fetch(`${origin}/fonts/dm-mono-latin-400-normal.woff2`).then((r) => r.arrayBuffer()),
+  ]);
 
   // Fetch avatar server-side → base64 data URL
   let avatarSrc: string | null = null;
