@@ -79,13 +79,14 @@ function stripeColor(record: string) {
 
 // ---------- image dimensions ----------
 
-const IMG_WIDTH = 800;
-const OUTER_PAD = 18;
-const HEADER_H = 66;
-const BADGE_H = 70;
-const BADGE_GAP = 6;
-const BADGE_AREA_PAD = 20; // 10px top + 10px bottom
-const FOOTER_H = 36;
+const S = 2; // scale factor — multiply all pixel values for 2× resolution
+const IMG_WIDTH = 800 * S;
+const OUTER_PAD = 18 * S;
+const HEADER_H = 66 * S;
+const BADGE_H = 70 * S;
+const BADGE_GAP = 6 * S;
+const BADGE_AREA_PAD = 20 * S;
+const FOOTER_H = 36 * S;
 
 // ---------- route ----------
 
@@ -173,7 +174,7 @@ export async function POST(req: NextRequest) {
             flexDirection: "column",
             flex: 1,
             background: "#ffffff",
-            borderRadius: 14,
+            borderRadius: 14 * S,
             border: "1px solid #e5e7eb",
             overflow: "hidden",
           }}
@@ -183,35 +184,25 @@ export async function POST(req: NextRequest) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
-              padding: "12px 16px",
+              gap: 8 * S,
+              padding: `${12 * S}px ${16 * S}px`,
               borderBottom: "1px solid #f3f4f6",
               height: HEADER_H,
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: 18, color: "#111827" }}>
+            <span style={{ fontWeight: 600, fontSize: 18 * S, color: "#111827" }}>
               {person.personName}
             </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: "#9ca3af",
-                fontFamily: "DM Mono",
-              }}
-            >
+            <span style={{ fontSize: 12 * S, color: "#9ca3af", fontFamily: "DM Mono" }}>
               {person.personId}
             </span>
             {avatarSrc && (
               <img
                 src={avatarSrc}
                 alt=""
-                width={40}
-                height={40}
-                style={{
-                  borderRadius: 20,
-                  marginLeft: "auto",
-                  border: "1px solid #e5e7eb",
-                }}
+                width={40 * S}
+                height={40 * S}
+                style={{ borderRadius: 20 * S, marginLeft: "auto", border: "1px solid #e5e7eb" }}
               />
             )}
           </div>
@@ -222,7 +213,7 @@ export async function POST(req: NextRequest) {
               display: "flex",
               flexDirection: "column",
               gap: BADGE_GAP,
-              padding: "10px 14px",
+              padding: `${10 * S}px ${14 * S}px`,
               flex: 1,
             }}
           >
@@ -233,14 +224,14 @@ export async function POST(req: NextRequest) {
                   display: "flex",
                   alignItems: "stretch",
                   height: BADGE_H,
-                  borderRadius: 9,
+                  borderRadius: 9 * S,
                   border: `${borderW}px solid ${borderCol}`,
                   backgroundColor: bgColor,
                 }}
               >
                 {/* Record stripe */}
                 {record && (
-                  <div style={{ width: 9, background: stripeColor(record), flexShrink: 0 }} />
+                  <div style={{ width: 9 * S, background: stripeColor(record), flexShrink: 0 }} />
                 )}
 
                 {/* Main content */}
@@ -250,28 +241,28 @@ export async function POST(req: NextRequest) {
                     flexDirection: "column",
                     justifyContent: "center",
                     flex: 1,
-                    padding: "0 13px",
-                    gap: 5,
+                    padding: `0 ${13 * S}px`,
+                    gap: 5 * S,
                   }}
                 >
                   {/* Row 1: event + type + competition */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 * S }}>
+                    <span style={{ fontSize: 12 * S, fontWeight: 600, color: "#374151" }}>
                       {eventName(pr.eventId)}
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: typeColor }}>
+                    <span style={{ fontSize: 11 * S, fontWeight: 600, color: typeColor }}>
                       {typeLabel(pr.eventId, pr.type)}
                     </span>
-                    <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                    <span style={{ fontSize: 11 * S, color: "#9ca3af" }}>
                       {pr.competitionName}
                     </span>
                   </div>
 
                   {/* Row 2: time + before + rank badges */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 * S }}>
                     <span
                       style={{
-                        fontSize: 20,
+                        fontSize: 20 * S,
                         fontWeight: 500,
                         color: "#111827",
                         fontFamily: "DM Mono",
@@ -281,26 +272,20 @@ export async function POST(req: NextRequest) {
                       {formatTime(pr.time, pr.eventId, pr.type)}
                     </span>
                     {item.prevTime !== undefined && (
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: "#9ca3af",
-                          fontFamily: "DM Mono",
-                        }}
-                      >
+                      <span style={{ fontSize: 11 * S, color: "#9ca3af", fontFamily: "DM Mono" }}>
                         {"(before " + formatTime(item.prevTime, pr.eventId, pr.type) + ")"}
                       </span>
                     )}
                     {/* Rank badges */}
-                    <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+                    <div style={{ display: "flex", gap: 4 * S, marginLeft: "auto" }}>
                       {record && (
                         <span
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            padding: "2px 7px",
+                            padding: `${2 * S}px ${7 * S}px`,
                             borderRadius: 9999,
-                            fontSize: 11,
+                            fontSize: 11 * S,
                             fontWeight: 600,
                             lineHeight: 1,
                             backgroundColor: recordColor(record).bg,
@@ -315,9 +300,9 @@ export async function POST(req: NextRequest) {
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            padding: "2px 6px",
-                            borderRadius: 5,
-                            fontSize: 11,
+                            padding: `${2 * S}px ${6 * S}px`,
+                            borderRadius: 5 * S,
+                            fontSize: 11 * S,
                             fontWeight: 400,
                             lineHeight: 1,
                             backgroundColor: "#f3f4f6",
@@ -333,9 +318,9 @@ export async function POST(req: NextRequest) {
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            padding: "2px 6px",
-                            borderRadius: 5,
-                            fontSize: 11,
+                            padding: `${2 * S}px ${6 * S}px`,
+                            borderRadius: 5 * S,
+                            fontSize: 11 * S,
                             fontWeight: 400,
                             lineHeight: 1,
                             backgroundColor: "#f3f4f6",
@@ -351,9 +336,9 @@ export async function POST(req: NextRequest) {
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            padding: "2px 6px",
-                            borderRadius: 5,
-                            fontSize: 11,
+                            padding: `${2 * S}px ${6 * S}px`,
+                            borderRadius: 5 * S,
+                            fontSize: 11 * S,
                             fontWeight: 400,
                             lineHeight: 1,
                             backgroundColor: "#f3f4f6",
@@ -376,15 +361,15 @@ export async function POST(req: NextRequest) {
                       flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: 2,
-                      padding: "0 13px",
+                      gap: 2 * S,
+                      padding: `0 ${13 * S}px`,
                       borderLeft: `1px solid ${isSingle ? "#bfdbfe" : "#fed7aa"}`,
                       flexShrink: 0,
                       color: "#f87171",
                     }}
                   >
-                    <span style={{ fontSize: 13, lineHeight: 1, color: "#f87171" }}>{"♡"}</span>
-                    <span style={{ fontSize: 11, lineHeight: 1 }}>{bravoCount}</span>
+                    <span style={{ fontSize: 13 * S, lineHeight: 1, color: "#f87171" }}>{"♡"}</span>
+                    <span style={{ fontSize: 11 * S, lineHeight: 1 }}>{bravoCount}</span>
                   </div>
                 )}
               </div>
@@ -397,22 +382,16 @@ export async function POST(req: NextRequest) {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              padding: "0 16px",
+              padding: `0 ${16 * S}px`,
               height: FOOTER_H,
               borderTop: "1px solid #f3f4f6",
               background: "#f9fafb",
             }}
           >
-            <span style={{ fontSize: 11, color: "#9ca3af" }}>
+            <span style={{ fontSize: 11 * S, color: "#9ca3af" }}>
               CubeFeed · cubefeed.tobip.ch
             </span>
-            <span
-              style={{
-                fontSize: 11,
-                color: "#9ca3af",
-                fontFamily: "DM Mono",
-              }}
-            >
+            <span style={{ fontSize: 11 * S, color: "#9ca3af", fontFamily: "DM Mono" }}>
               {dateStr} · {timeStr}
             </span>
           </div>
