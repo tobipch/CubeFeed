@@ -24,18 +24,25 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
   const [avatarReady, setAvatarReady] = useState(!avatarUrl);
   const shareCardRef = useRef<HTMLDivElement>(null);
   const outputBlobUrlRef = useRef<string | null>(null);
-  const avatarBlobUrlRef = useRef<string | null>(null);
 
-  // Step 1: pre-fetch avatar via proxy → blob URL (avoids CORS taint in canvas)
+  // Step 1: pre-fetch avatar via proxy → base64 data URL so html2canvas
+  // can embed it directly without any network request
   useEffect(() => {
     if (!avatarUrl) return;
     const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(avatarUrl)}`;
     fetch(proxyUrl)
       .then((r) => (r.ok ? r.blob() : Promise.reject()))
-      .then((imgBlob) => {
-        const url = URL.createObjectURL(imgBlob);
-        avatarBlobUrlRef.current = url;
-        setAvatarDataUrl(url);
+      .then(
+        (imgBlob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(imgBlob);
+          }),
+      )
+      .then((dataUrl) => {
+        setAvatarDataUrl(dataUrl);
         setAvatarReady(true);
       })
       .catch(() => setAvatarReady(true)); // proceed without avatar on error
@@ -64,11 +71,10 @@ export default function ShareModal({ person, bravos, avatarUrl, onClose }: Props
     return () => clearTimeout(timeout);
   }, [avatarReady]);
 
-  // Revoke blob URLs on unmount
+  // Revoke output blob URL on unmount (avatar is data URL, no revocation needed)
   useEffect(() => {
     return () => {
       if (outputBlobUrlRef.current) URL.revokeObjectURL(outputBlobUrlRef.current);
-      if (avatarBlobUrlRef.current) URL.revokeObjectURL(avatarBlobUrlRef.current);
     };
   }, []);
 

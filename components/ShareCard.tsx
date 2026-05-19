@@ -207,7 +207,7 @@ function SharePRBadge({
 
 function RankBadge({ label, value }: { label: string; value: number }) {
   return (
-    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600 tabular-nums">
+    <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600 tabular-nums leading-none">
       {label} {value}
     </span>
   );
@@ -253,17 +253,17 @@ export default function ShareCard({ person, bravos, avatarDataUrl }: Props) {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {/* Header — identical layout to PersonCard */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
-          <span className="font-semibold text-gray-900">{person.personName}</span>
-          <span className="text-xs text-gray-400 font-mono shrink-0">{person.personId}</span>
+          <span className="font-semibold text-gray-900 leading-none">{person.personName}</span>
+          <span className="text-xs text-gray-400 font-mono shrink-0 leading-none">{person.personId}</span>
           {avatarDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={avatarDataUrl}
               alt={person.personName}
-              className="ml-auto w-10 h-10 rounded-full object-cover ring-1 ring-gray-200"
+              className="ml-auto w-10 h-10 rounded-full object-cover ring-1 ring-gray-200 self-center"
             />
           ) : (
-            <div className="ml-auto w-10 h-10 rounded-full bg-gray-100" />
+            <div className="ml-auto w-10 h-10 rounded-full bg-gray-100 self-center" />
           )}
         </div>
 
@@ -285,11 +285,11 @@ export default function ShareCard({ person, bravos, avatarDataUrl }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 bg-gray-50">
-          <span className="text-xs font-bold text-gray-500 tracking-wide leading-none">
+        <div className="flex items-center justify-between px-3 py-1.5 border-t border-gray-100 bg-gray-50">
+          <span className="text-[11px] text-gray-400 leading-none">
             🏆 CubeFeed · cubefeed.tobip.ch
           </span>
-          <span className="text-xs text-gray-400 font-mono leading-none">
+          <span className="text-[11px] text-gray-400 font-mono leading-none">
             {dateStr} · {timeStr}
           </span>
         </div>

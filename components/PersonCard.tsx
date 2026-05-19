@@ -355,18 +355,8 @@ function PRBadge({
         </div>
       </a>
 
-      {/* Right panel: share (optional) + heart */}
+      {/* Right panel: heart (main, top) + share (compact, below) */}
       <div className={`flex flex-col items-stretch border-l ${dividerColor} shrink-0 self-stretch`}>
-        {onShare && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onShare(); }}
-            className={`flex items-center justify-center flex-1 px-2.5 sm:px-3.5 text-gray-300 hover:text-gray-500 transition-colors border-b ${dividerColor}`}
-            aria-label="Share this PR"
-          >
-            <ShareIcon className="w-3.5 h-3.5" />
-          </button>
-        )}
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onBravo?.(); }}
@@ -378,6 +368,16 @@ function PRBadge({
             <span className="text-xs leading-none">{bravoCount}</span>
           )}
         </button>
+        {onShare && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onShare(); }}
+            className={`flex items-center justify-center px-2.5 sm:px-3.5 py-1 text-gray-300 hover:text-gray-500 transition-colors border-t ${dividerColor}`}
+            aria-label="Share this PR"
+          >
+            <ShareIcon className="w-3 h-3" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -421,7 +421,7 @@ function ShareIcon({ className }: { className?: string }) {
 
 function RankBadge({ label, value }: { label: string; value: number }) {
   return (
-    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600 tabular-nums">
+    <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600 tabular-nums leading-none">
       {label} {value}
     </span>
   );

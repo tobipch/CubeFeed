@@ -4,15 +4,10 @@ async function waitForImages(el: HTMLElement): Promise<void> {
     imgs.map(
       (img) =>
         new Promise<void>((resolve) => {
-          if (img.complete && img.naturalHeight !== 0) {
-            resolve();
-            return;
-          }
-          const done = () => resolve();
-          img.addEventListener("load", done, { once: true });
-          img.addEventListener("error", done, { once: true });
-          // Hard timeout so we never block forever
-          setTimeout(resolve, 4000);
+          if (img.complete) { resolve(); return; }
+          img.addEventListener("load", () => resolve(), { once: true });
+          img.addEventListener("error", () => resolve(), { once: true });
+          setTimeout(resolve, 5000);
         }),
     ),
   );
@@ -21,18 +16,20 @@ async function waitForImages(el: HTMLElement): Promise<void> {
 export async function generateShareImage(element: HTMLElement): Promise<Blob> {
   const { default: html2canvas } = await import("html2canvas");
 
-  await waitForImages(element);
+  // Ensure all web fonts (Geist, DM Mono, cubing icons) are fully loaded
+  if (typeof document !== "undefined" && document.fonts?.ready) {
+    await document.fonts.ready;
+  }
 
-  // Extra tick for layout / font rendering to settle
-  await new Promise((r) => setTimeout(r, 80));
+  await waitForImages(element);
 
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
     allowTaint: false,
     logging: false,
-    backgroundColor: "#f9fafb",
-    // scale/allowTaint are valid options but missing from @types/html2canvas
+    backgroundColor: "#f3f4f6",
+    // scale/allowTaint are valid options missing from @types/html2canvas
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
 
