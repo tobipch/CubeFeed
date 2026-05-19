@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 import { readFileSync } from "fs";
