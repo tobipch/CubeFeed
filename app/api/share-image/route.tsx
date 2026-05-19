@@ -6,19 +6,16 @@ import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
 
-// ---------- fonts — read once at module load ----------
+// ---------- fonts — read from public/fonts (always included in Vercel bundle) ----------
 
 const geistRegular = readFileSync(
-  join(process.cwd(), "node_modules/geist/dist/fonts/geist-sans/Geist-Regular.woff2"),
+  join(process.cwd(), "public/fonts/Geist-Regular.woff2"),
 );
 const geistSemiBold = readFileSync(
-  join(process.cwd(), "node_modules/geist/dist/fonts/geist-sans/Geist-SemiBold.woff2"),
+  join(process.cwd(), "public/fonts/Geist-SemiBold.woff2"),
 );
 const dmMono = readFileSync(
-  join(
-    process.cwd(),
-    "node_modules/@fontsource/dm-mono/files/dm-mono-latin-400-normal.woff2",
-  ),
+  join(process.cwd(), "public/fonts/dm-mono-latin-400-normal.woff2"),
 );
 
 // ---------- data helpers (mirrors PersonCard logic) ----------
