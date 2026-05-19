@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
 import { formatTime } from "@/lib/format";
+
+const ShareModal = lazy(() => import("./ShareModal"));
 
 interface Props {
   person: PersonPRs;
@@ -26,6 +28,7 @@ export default function PersonCard({
   onBravo,
 }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [showShare, setShowShare] = useState(false);
 
   useEffect(() => {
     fetch(`https://www.worldcubeassociation.org/api/v0/persons/${person.personId}`)
@@ -102,7 +105,15 @@ export default function PersonCard({
         <span className="text-xs text-gray-400 font-mono shrink-0">
           {person.personId}
         </span>
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowShare(true)}
+            className="text-gray-300 hover:text-gray-500 transition-colors shrink-0"
+            aria-label="Ergebnis teilen"
+          >
+            <UploadIcon />
+          </button>
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -115,6 +126,17 @@ export default function PersonCard({
           )}
         </div>
       </div>
+
+      {showShare && (
+        <Suspense fallback={null}>
+          <ShareModal
+            person={person}
+            bravos={bravos}
+            avatarUrl={avatarUrl ?? undefined}
+            onClose={() => setShowShare(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Badge list */}
       <div className="px-3 py-2 flex flex-col gap-1.5">
@@ -370,5 +392,23 @@ function RankBadge({ label, value }: { label: string; value: number }) {
     <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
       {label} {value}
     </span>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="w-4 h-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <polyline points="16 6 12 2 8 6" />
+      <line x1="12" y1="2" x2="12" y2="15" />
+    </svg>
   );
 }
