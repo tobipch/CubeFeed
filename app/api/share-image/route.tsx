@@ -98,10 +98,11 @@ export async function POST(req: NextRequest) {
 
   // Fetch fonts from jsDelivr CDN — public, no auth, works in all Vercel environments
   const CDN = "https://cdn.jsdelivr.net/npm";
-  const [geistRegular, geistSemiBold, dmMono] = await Promise.all([
+  const [geistRegular, geistSemiBold, dmMono400, dmMono500] = await Promise.all([
     fetch(`${CDN}/geist@1.7.0/dist/fonts/geist-sans/Geist-Regular.ttf`).then((r) => r.arrayBuffer()),
     fetch(`${CDN}/geist@1.7.0/dist/fonts/geist-sans/Geist-SemiBold.ttf`).then((r) => r.arrayBuffer()),
     fetch(`${CDN}/@fontsource/dm-mono@5.2.7/files/dm-mono-latin-400-normal.woff`).then((r) => r.arrayBuffer()),
+    fetch(`${CDN}/@fontsource/dm-mono@5.2.7/files/dm-mono-latin-500-normal.woff`).then((r) => r.arrayBuffer()),
   ]);
 
   // Pre-fetch avatar as base64 data URL so Satori doesn't do its own external fetch
@@ -271,7 +272,7 @@ export async function POST(req: NextRequest) {
                     <span
                       style={{
                         fontSize: 20,
-                        fontWeight: 400,
+                        fontWeight: 500,
                         color: "#111827",
                         fontFamily: "DM Mono",
                         lineHeight: 1,
@@ -424,7 +425,8 @@ export async function POST(req: NextRequest) {
       fonts: [
         { name: "Geist", data: geistRegular, weight: 400, style: "normal" },
         { name: "Geist", data: geistSemiBold, weight: 600, style: "normal" },
-        { name: "DM Mono", data: dmMono, weight: 400, style: "normal" },
+        { name: "DM Mono", data: dmMono400, weight: 400, style: "normal" },
+        { name: "DM Mono", data: dmMono500, weight: 500, style: "normal" },
       ],
     });
 
