@@ -104,8 +104,24 @@ export async function POST(req: NextRequest) {
     fetch(`${CDN}/@fontsource/dm-mono@5.2.7/files/dm-mono-latin-400-normal.woff2`).then((r) => r.arrayBuffer()),
   ]);
 
-  // Satori fetches external images by URL — no base64 conversion needed
-  const avatarSrc = avatarUrl ?? null;
+  // Pre-fetch avatar as base64 data URL so Satori doesn't do its own external fetch
+  let avatarSrc: string | null = null;
+  if (avatarUrl) {
+    try {
+      const res = await fetch(avatarUrl);
+      if (res.ok) {
+        const buf = new Uint8Array(await res.arrayBuffer());
+        const mime = res.headers.get("content-type") ?? "image/jpeg";
+        let binary = "";
+        for (let i = 0; i < buf.length; i += 1024) {
+          binary += String.fromCharCode(...buf.subarray(i, i + 1024));
+        }
+        avatarSrc = `data:${mime};base64,${btoa(binary)}`;
+      }
+    } catch {
+      // proceed without avatar
+    }
+  }
 
   const dedupedPRs = dedupePRs(person.prs);
   const eventGroups = groupAndSort(dedupedPRs);
@@ -137,7 +153,7 @@ export async function POST(req: NextRequest) {
   );
 
   try {
-    return new ImageResponse(
+    const imgResponse = new ImageResponse(
     (
       <div
         style={{
@@ -410,10 +426,22 @@ export async function POST(req: NextRequest) {
         { name: "Geist", data: geistSemiBold, weight: 600, style: "normal" },
         { name: "DM Mono", data: dmMono, weight: 400, style: "normal" },
       ],
-    },
-  );
+    });
+
+    // Materialize the stream — catches silent empty renders
+    const pngBuffer = await imgResponse.arrayBuffer();
+    if (pngBuffer.byteLength === 0) {
+      return new Response(JSON.stringify({ error: "Satori produced empty output" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(pngBuffer, {
+      status: 200,
+      headers: { "Content-Type": "image/png" },
+    });
   } catch (err) {
-    const msg = err instanceof Error ? err.message + "\n" + err.stack : String(err);
+    const msg = err instanceof Error ? err.message + "\n" + (err.stack ?? "") : String(err);
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
