@@ -96,12 +96,12 @@ export async function POST(req: NextRequest) {
     avatarUrl?: string;
   };
 
-  // Fetch fonts from public/ via HTTP — works on any runtime, no filesystem needed
-  const origin = new URL(req.url).origin;
+  // Fetch fonts from jsDelivr CDN — public, no auth, works in all Vercel environments
+  const CDN = "https://cdn.jsdelivr.net/npm";
   const [geistRegular, geistSemiBold, dmMono] = await Promise.all([
-    fetch(`${origin}/fonts/Geist-Regular.woff2`).then((r) => r.arrayBuffer()),
-    fetch(`${origin}/fonts/Geist-SemiBold.woff2`).then((r) => r.arrayBuffer()),
-    fetch(`${origin}/fonts/dm-mono-latin-400-normal.woff2`).then((r) => r.arrayBuffer()),
+    fetch(`${CDN}/geist@1.7.0/dist/fonts/geist-sans/Geist-Regular.woff2`).then((r) => r.arrayBuffer()),
+    fetch(`${CDN}/geist@1.7.0/dist/fonts/geist-sans/Geist-SemiBold.woff2`).then((r) => r.arrayBuffer()),
+    fetch(`${CDN}/@fontsource/dm-mono@5.2.7/files/dm-mono-latin-400-normal.woff2`).then((r) => r.arrayBuffer()),
   ]);
 
   // Fetch avatar server-side → base64 data URL
