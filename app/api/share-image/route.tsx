@@ -128,14 +128,31 @@ export async function POST(req: NextRequest) {
   const imgHeight = OUTER_PAD * 2 + HEADER_H + badgeAreaH + FOOTER_H;
 
   const now = new Date();
-  const dateStr = now.toLocaleDateString(undefined, {
+  const dateStr = now.toLocaleDateString("de-CH", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
-  const timeStr = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const timeStr = now.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
 
-  return new ImageResponse(
+  // Flatten badge list — Satori does not handle nested arrays from .map inside .map
+  const badges = eventGroups.flatMap(([eventId, items]) =>
+    items.map((item, i) => {
+      const pr = item.pr;
+      const isSingle = pr.type === "single";
+      const record = getRecord(pr);
+      const bravoKey = `${person.personId}:${pr.eventId}:${pr.type}:${pr.time}`;
+      const bravoCount = bravos?.[bravoKey] ?? 0;
+      const bgColor = isSingle ? "#eff6ff" : "#fff7ed";
+      const borderCol = record ? stripeColor(record) : isSingle ? "#bfdbfe" : "#fed7aa";
+      const borderW = record ? 2 : 1;
+      const typeColor = isSingle ? "#3b82f6" : "#f97316";
+      return { key: `${eventId}-${pr.type}-${i}`, pr, item, isSingle, record, bravoCount, bgColor, borderCol, borderW, typeColor };
+    })
+  );
+
+  try {
+    return new ImageResponse(
     (
       <div
         style={{
@@ -177,7 +194,7 @@ export async function POST(req: NextRequest) {
               style={{
                 fontSize: 12,
                 color: "#9ca3af",
-                fontFamily: '"DM Mono", monospace',
+                fontFamily: "DM Mono",
               }}
             >
               {person.personId}
@@ -185,12 +202,12 @@ export async function POST(req: NextRequest) {
             {avatarSrc && (
               <img
                 src={avatarSrc}
+                alt=""
                 width={40}
                 height={40}
                 style={{
                   borderRadius: 20,
                   marginLeft: "auto",
-                  objectFit: "cover",
                   border: "1px solid #e5e7eb",
                 }}
               />
@@ -207,234 +224,169 @@ export async function POST(req: NextRequest) {
               flex: 1,
             }}
           >
-            {eventGroups.map(([eventId, items]) =>
-              items.map((item, i) => {
-                const pr = item.pr;
-                const isSingle = pr.type === "single";
-                const record = getRecord(pr);
-                const bravoKey = `${person.personId}:${pr.eventId}:${pr.type}:${pr.time}`;
-                const bravoCount = bravos?.[bravoKey] ?? 0;
+            {badges.map(({ key, pr, item, isSingle, record, bravoCount, bgColor, borderCol, borderW, typeColor }) => (
+              <div
+                key={key}
+                style={{
+                  display: "flex",
+                  alignItems: "stretch",
+                  height: BADGE_H,
+                  borderRadius: 9,
+                  border: `${borderW}px solid ${borderCol}`,
+                  backgroundColor: bgColor,
+                }}
+              >
+                {/* Record stripe */}
+                {record && (
+                  <div style={{ width: 9, background: stripeColor(record), flexShrink: 0 }} />
+                )}
 
-                const bgColor = isSingle ? "#eff6ff" : "#fff7ed";
-                const borderCol = record
-                  ? stripeColor(record)
-                  : isSingle
-                  ? "#bfdbfe"
-                  : "#fed7aa";
-                const borderW = record ? 2 : 1;
-                const typeColor = isSingle ? "#3b82f6" : "#f97316";
+                {/* Main content */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    flex: 1,
+                    padding: "0 13px",
+                    gap: 5,
+                  }}
+                >
+                  {/* Row 1: event + type + competition */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                      {eventName(pr.eventId)}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: typeColor }}>
+                      {typeLabel(pr.eventId, pr.type)}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                      {pr.competitionName}
+                    </span>
+                  </div>
 
-                return (
-                  <div
-                    key={`${eventId}-${pr.type}-${i}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "stretch",
-                      height: BADGE_H,
-                      borderRadius: 9,
-                      border: `${borderW}px solid ${borderCol}`,
-                      backgroundColor: bgColor,
-                      overflow: "hidden",
-                    }}
-                  >
-                    {/* Record stripe */}
-                    {record && (
-                      <div
-                        style={{
-                          width: 9,
-                          background: stripeColor(record),
-                          flexShrink: 0,
-                        }}
-                      />
-                    )}
-
-                    {/* Main content */}
-                    <div
+                  {/* Row 2: time + before + rank badges */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span
                       style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "center",
-                        flex: 1,
-                        padding: "0 13px",
-                        gap: 5,
-                        minWidth: 0,
-                        overflow: "hidden",
+                        fontSize: 20,
+                        fontWeight: 400,
+                        color: "#111827",
+                        fontFamily: "DM Mono",
+                        lineHeight: 1,
                       }}
                     >
-                      {/* Row 1: event + type + competition */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: "#374151",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {eventName(eventId)}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: typeColor,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {typeLabel(eventId, pr.type)}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#9ca3af",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            flex: 1,
-                          }}
-                        >
-                          {pr.competitionName}
-                        </span>
-                      </div>
-
-                      {/* Row 2: time + before + rank badges */}
-                      <div
+                      {formatTime(pr.time, pr.eventId, pr.type)}
+                    </span>
+                    {item.prevTime !== undefined && (
+                      <span
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          fontFamily: "DM Mono",
                         }}
                       >
+                        {"(before " + formatTime(item.prevTime, pr.eventId, pr.type) + ")"}
+                      </span>
+                    )}
+                    {/* Rank badges */}
+                    <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+                      {record && (
                         <span
-                          style={{
-                            fontSize: 20,
-                            fontWeight: 700,
-                            color: "#111827",
-                            fontFamily: '"DM Mono", monospace',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {formatTime(pr.time, pr.eventId, pr.type)}
-                        </span>
-                        {item.prevTime !== undefined && (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#9ca3af",
-                              fontFamily: '"DM Mono", monospace',
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            (before {formatTime(item.prevTime, pr.eventId, pr.type)})
-                          </span>
-                        )}
-                        {/* Rank badges */}
-                        <div
                           style={{
                             display: "flex",
-                            gap: 4,
-                            marginLeft: "auto",
-                            flexShrink: 0,
+                            alignItems: "center",
+                            padding: "2px 7px",
+                            borderRadius: 9999,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            lineHeight: 1,
+                            backgroundColor: recordColor(record).bg,
+                            color: recordColor(record).text,
                           }}
                         >
-                          {record && (
-                            <span
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                padding: "2px 7px",
-                                borderRadius: 9999,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                lineHeight: 1,
-                                backgroundColor: recordColor(record).bg,
-                                color: recordColor(record).text,
-                              }}
-                            >
-                              {record}
-                            </span>
-                          )}
-                          {(pr.nr ?? 0) > 0 && (
-                            <span
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                padding: "2px 6px",
-                                borderRadius: 5,
-                                fontSize: 11,
-                                fontWeight: 500,
-                                lineHeight: 1,
-                                backgroundColor: "#f3f4f6",
-                                color: "#374151",
-                                fontFamily: '"DM Mono", monospace',
-                              }}
-                            >
-                              NR {pr.nr}
-                            </span>
-                          )}
-                          {(pr.cr ?? 0) > 0 && (
-                            <span
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                padding: "2px 6px",
-                                borderRadius: 5,
-                                fontSize: 11,
-                                fontWeight: 500,
-                                lineHeight: 1,
-                                backgroundColor: "#f3f4f6",
-                                color: "#374151",
-                                fontFamily: '"DM Mono", monospace',
-                              }}
-                            >
-                              CR {pr.cr}
-                            </span>
-                          )}
-                          {(pr.wr ?? 0) > 0 && (
-                            <span
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                padding: "2px 6px",
-                                borderRadius: 5,
-                                fontSize: 11,
-                                fontWeight: 500,
-                                lineHeight: 1,
-                                backgroundColor: "#f3f4f6",
-                                color: "#374151",
-                                fontFamily: '"DM Mono", monospace',
-                              }}
-                            >
-                              WR {pr.wr}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                          {record}
+                        </span>
+                      )}
+                      {(pr.nr ?? 0) > 0 && (
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "2px 6px",
+                            borderRadius: 5,
+                            fontSize: 11,
+                            fontWeight: 400,
+                            lineHeight: 1,
+                            backgroundColor: "#f3f4f6",
+                            color: "#374151",
+                            fontFamily: "DM Mono",
+                          }}
+                        >
+                          {"NR " + pr.nr}
+                        </span>
+                      )}
+                      {(pr.cr ?? 0) > 0 && (
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "2px 6px",
+                            borderRadius: 5,
+                            fontSize: 11,
+                            fontWeight: 400,
+                            lineHeight: 1,
+                            backgroundColor: "#f3f4f6",
+                            color: "#374151",
+                            fontFamily: "DM Mono",
+                          }}
+                        >
+                          {"CR " + pr.cr}
+                        </span>
+                      )}
+                      {(pr.wr ?? 0) > 0 && (
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "2px 6px",
+                            borderRadius: 5,
+                            fontSize: 11,
+                            fontWeight: 400,
+                            lineHeight: 1,
+                            backgroundColor: "#f3f4f6",
+                            color: "#374151",
+                            fontFamily: "DM Mono",
+                          }}
+                        >
+                          {"WR " + pr.wr}
+                        </span>
+                      )}
                     </div>
-
-                    {/* Bravo count */}
-                    {bravoCount > 0 && (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 2,
-                          padding: "0 13px",
-                          borderLeft: `1px solid ${isSingle ? "#bfdbfe" : "#fed7aa"}`,
-                          flexShrink: 0,
-                          color: "#f87171",
-                        }}
-                      >
-                        <span style={{ fontSize: 15, lineHeight: 1 }}>♥</span>
-                        <span style={{ fontSize: 11, lineHeight: 1 }}>{bravoCount}</span>
-                      </div>
-                    )}
                   </div>
-                );
-              })
-            )}
+                </div>
+
+                {/* Bravo count */}
+                {bravoCount > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 2,
+                      padding: "0 13px",
+                      borderLeft: `1px solid ${isSingle ? "#bfdbfe" : "#fed7aa"}`,
+                      flexShrink: 0,
+                      color: "#f87171",
+                    }}
+                  >
+                    <span style={{ fontSize: 15, lineHeight: 1 }}>{"♥"}</span>
+                    <span style={{ fontSize: 11, lineHeight: 1 }}>{bravoCount}</span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Footer */}
@@ -456,7 +408,7 @@ export async function POST(req: NextRequest) {
               style={{
                 fontSize: 11,
                 color: "#9ca3af",
-                fontFamily: '"DM Mono", monospace',
+                fontFamily: "DM Mono",
               }}
             >
               {dateStr} · {timeStr}
@@ -475,4 +427,11 @@ export async function POST(req: NextRequest) {
       ],
     },
   );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message + "\n" + err.stack : String(err);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
