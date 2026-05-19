@@ -91,15 +91,25 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
       CASE WHEN r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best THEN 1 ELSE 0 END AS is_avg_pr,
       (
         SELECT MIN(r2.best) FROM results r2
+        LEFT JOIN competitions c2 ON r2.competition_id = c2.id
         WHERE r2.person_id = r.person_id
           AND r2.event_id  = r.event_id
           AND r2.best > r.best AND r2.best > 0
+          AND (
+            COALESCE(c2.end_date, CURDATE()) < COALESCE(c.end_date, CURDATE())
+            OR (r2.competition_id = r.competition_id AND r2.round_type_id < r.round_type_id)
+          )
       ) AS prev_single_best,
       (
         SELECT MIN(r2.average) FROM results r2
+        LEFT JOIN competitions c2 ON r2.competition_id = c2.id
         WHERE r2.person_id = r.person_id
           AND r2.event_id  = r.event_id
           AND r2.average > r.average AND r2.average > 0
+          AND (
+            COALESCE(c2.end_date, CURDATE()) < COALESCE(c.end_date, CURDATE())
+            OR (r2.competition_id = r.competition_id AND r2.round_type_id < r.round_type_id)
+          )
       ) AS prev_avg_best
     FROM results r
     LEFT JOIN competitions c ON r.competition_id = c.id
@@ -174,15 +184,25 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
       CASE WHEN r.average > 0 AND ra.best IS NOT NULL AND r.average = ra.best THEN 1 ELSE 0 END AS is_avg_pr,
       (
         SELECT MIN(r2.best) FROM results r2
+        LEFT JOIN competitions c2 ON r2.competition_id = c2.id
         WHERE r2.person_id = r.person_id
           AND r2.event_id  = r.event_id
           AND r2.best > r.best AND r2.best > 0
+          AND (
+            COALESCE(c2.end_date, CURDATE()) < COALESCE(c.end_date, CURDATE())
+            OR (r2.competition_id = r.competition_id AND r2.round_type_id < r.round_type_id)
+          )
       ) AS prev_single_best,
       (
         SELECT MIN(r2.average) FROM results r2
+        LEFT JOIN competitions c2 ON r2.competition_id = c2.id
         WHERE r2.person_id = r.person_id
           AND r2.event_id  = r.event_id
           AND r2.average > r.average AND r2.average > 0
+          AND (
+            COALESCE(c2.end_date, CURDATE()) < COALESCE(c.end_date, CURDATE())
+            OR (r2.competition_id = r.competition_id AND r2.round_type_id < r.round_type_id)
+          )
       ) AS prev_avg_best
     FROM results r
     LEFT JOIN competitions c ON r.competition_id = c.id
