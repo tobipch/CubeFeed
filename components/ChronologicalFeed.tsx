@@ -18,6 +18,18 @@ function bravoKey(personId: string, eventId: string, type: string, time: number)
   return `${personId}:${eventId}:${type}:${time}`;
 }
 
+function groupConsecutive(items: FeedItem[]): FeedItem[][] {
+  const runs: FeedItem[][] = [];
+  for (const item of items) {
+    if (runs.length === 0 || runs[runs.length - 1][0].personId !== item.personId) {
+      runs.push([item]);
+    } else {
+      runs[runs.length - 1].push(item);
+    }
+  }
+  return runs;
+}
+
 interface Props {
   persons: PersonPRs[];
   lastVisitDate?: string | null;
@@ -133,8 +145,6 @@ export default function ChronologicalFeed({
 
   if (feedItems.length === 0) return null;
 
-  // Build the share payload — a PersonPRs containing just the selected PR,
-  // matching the shape ShareModal expects for a single-PR share.
   const sharePersonData: PersonPRs | null = shareItem
     ? {
         personId: shareItem.personId,
@@ -145,35 +155,34 @@ export default function ChronologicalFeed({
 
   return (
     <div className="space-y-6">
-      {grouped.map(([date, items]) => (
-        <div key={date}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-sm font-semibold text-gray-500 whitespace-nowrap">
-              {formatPRDate(date)}
-            </span>
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs text-gray-400 font-mono whitespace-nowrap">{date}</span>
-          </div>
-          <div className="space-y-3">
-            {items.map((item, i) => {
-              const key = bravoKey(item.personId, item.pr.eventId, item.pr.type, item.pr.time);
-              const isNew = lastVisitDate ? effectivePRDate(item.pr) > lastVisitDate : false;
-              return (
+      {grouped.map(([date, items]) => {
+        const runs = groupConsecutive(items);
+        return (
+          <div key={date}>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-sm font-semibold text-gray-500 whitespace-nowrap">
+                {formatPRDate(date)}
+              </span>
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs text-gray-400 font-mono whitespace-nowrap">{date}</span>
+            </div>
+            <div className="space-y-3">
+              {runs.map((runItems, runIdx) => (
                 <FeedRow
-                  key={`${item.personId}-${item.pr.eventId}-${item.pr.type}-${item.pr.time}-${i}`}
-                  item={item}
-                  avatarUrl={avatarMap[item.personId] ?? null}
-                  bravoCount={bravos[key] ?? 0}
-                  isLiked={liked.has(key)}
-                  isNew={isNew}
-                  onBravo={() => handleBravo(item.personId, item.pr.eventId, item.pr.type, item.pr.time)}
-                  onShare={() => setShareItem(item)}
+                  key={`${runItems[0].personId}-${date}-${runIdx}`}
+                  items={runItems}
+                  avatarUrl={avatarMap[runItems[0].personId] ?? null}
+                  bravos={bravos}
+                  liked={liked}
+                  lastVisitDate={lastVisitDate}
+                  onBravo={handleBravo}
+                  onShare={setShareItem}
                 />
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {sharePersonData && (
         <ShareModal
@@ -188,24 +197,25 @@ export default function ChronologicalFeed({
 }
 
 function FeedRow({
-  item,
+  items,
   avatarUrl,
-  bravoCount,
-  isLiked,
-  isNew,
+  bravos,
+  liked,
+  lastVisitDate,
   onBravo,
   onShare,
 }: {
-  item: FeedItem;
+  items: FeedItem[];
   avatarUrl: string | null;
-  bravoCount: number;
-  isLiked: boolean;
-  isNew: boolean;
+  bravos: Record<string, number>;
+  liked: Set<string>;
+  lastVisitDate?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  onBravo: () => void | Promise<void>;
-  onShare: () => void;
+  onBravo: (personId: string, eventId: string, type: string, time: number) => void | Promise<void>;
+  onShare: (item: FeedItem) => void;
 }) {
-  const personLink = `https://www.worldcubeassociation.org/persons/${item.personId}`;
+  const { personId, personName } = items[0];
+  const personLink = `https://www.worldcubeassociation.org/persons/${personId}`;
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Person header */}
@@ -214,7 +224,7 @@ function FeedRow({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={avatarUrl}
-            alt={item.personName}
+            alt={personName}
             className="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200 shrink-0"
           />
         ) : (
@@ -226,23 +236,30 @@ function FeedRow({
           rel="noopener noreferrer"
           className="font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate"
         >
-          {item.personName}
+          {personName}
         </a>
-        <span className="text-xs text-gray-400 font-mono shrink-0">{item.personId}</span>
+        <span className="text-xs text-gray-400 font-mono shrink-0">{personId}</span>
       </div>
 
-      {/* Same PRBadge as in PersonCard */}
-      <div className="px-3 py-2">
-        <PRBadge
-          pr={item.pr}
-          personId={item.personId}
-          prevTime={item.prevTime}
-          bravoCount={bravoCount}
-          isLiked={isLiked}
-          isNew={isNew}
-          onBravo={onBravo}
-          onShare={onShare}
-        />
+      {/* PRBadges */}
+      <div className="px-3 py-2 flex flex-col gap-1.5">
+        {items.map((item) => {
+          const key = bravoKey(item.personId, item.pr.eventId, item.pr.type, item.pr.time);
+          const isNew = lastVisitDate ? effectivePRDate(item.pr) > lastVisitDate : false;
+          return (
+            <PRBadge
+              key={`${item.pr.eventId}-${item.pr.type}-${item.pr.time}`}
+              pr={item.pr}
+              personId={item.personId}
+              prevTime={item.prevTime}
+              bravoCount={bravos[key] ?? 0}
+              isLiked={liked.has(key)}
+              isNew={isNew}
+              onBravo={() => onBravo(item.personId, item.pr.eventId, item.pr.type, item.pr.time)}
+              onShare={() => onShare(item)}
+            />
+          );
+        })}
       </div>
     </div>
   );
