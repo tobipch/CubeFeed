@@ -246,11 +246,11 @@ async function main() {
 
   await exec(`
     CREATE TABLE IF NOT EXISTS pr_first_seen (
-      person_id      VARCHAR(255) NOT NULL,
-      event_id       VARCHAR(255) NOT NULL,
-      type           VARCHAR(50)  NOT NULL,
+      person_id      VARCHAR(20)  NOT NULL,
+      event_id       VARCHAR(32)  NOT NULL,
+      type           VARCHAR(16)  NOT NULL,
       time           INT          NOT NULL,
-      competition_id VARCHAR(255) NOT NULL,
+      competition_id VARCHAR(64)  NOT NULL,
       first_seen_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (person_id, event_id, type, time, competition_id)
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
