@@ -404,22 +404,33 @@ export async function getVirtualAllRanks(
           [pr.eventId, pr.time]
         ),
         pr.continentId
-          ? query<{ cr: number }>(
-              `SELECT 1 + COUNT(*) AS cr FROM ${table}
-               WHERE event_id = ? AND continent_id = ? AND best < ? AND best > 0`,
-              [pr.eventId, pr.continentId, pr.time]
+          ? query<{ cr: number; total: number }>(
+              `SELECT
+                 1 + SUM(CASE WHEN best < ? AND best > 0 THEN 1 ELSE 0 END) AS cr,
+                 SUM(CASE WHEN best > 0 THEN 1 ELSE 0 END) AS total
+               FROM ${table}
+               WHERE event_id = ? AND continent_id = ?`,
+              [pr.time, pr.eventId, pr.continentId]
             )
-          : Promise.resolve([] as { cr: number }[]),
-        query<{ nr: number }>(
-          `SELECT 1 + COUNT(*) AS nr FROM ${table}
-           WHERE event_id = ? AND country_id = ? AND best < ? AND best > 0`,
-          [pr.eventId, pr.countryId, pr.time]
+          : Promise.resolve([] as { cr: number; total: number }[]),
+        query<{ nr: number; total: number }>(
+          `SELECT
+             1 + SUM(CASE WHEN best < ? AND best > 0 THEN 1 ELSE 0 END) AS nr,
+             SUM(CASE WHEN best > 0 THEN 1 ELSE 0 END) AS total
+           FROM ${table}
+           WHERE event_id = ? AND country_id = ?`,
+          [pr.time, pr.eventId, pr.countryId]
         ),
       ]);
+      // Only trust regional ranks when the region actually has data for the event.
+      // Otherwise a missing/mismatched continent_id or country_id makes the count
+      // query return 0, yielding a bogus rank-1.
+      const crTotal = Number(crRows[0]?.total ?? 0);
+      const nrTotal = Number(nrRows[0]?.total ?? 0);
       result.set(key, {
         wr: wrRows[0]?.wr ?? null,
-        cr: crRows[0]?.cr ?? null,
-        nr: nrRows[0]?.nr ?? null,
+        cr: crTotal > 0 ? Number(crRows[0]!.cr) : null,
+        nr: nrTotal > 0 ? Number(nrRows[0]!.nr) : null,
       });
     } catch {
       // ignore
