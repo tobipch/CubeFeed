@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
-import { formatTime } from "@/lib/format";
+import { formatTime, formatPRDate } from "@/lib/format";
 import ShareModal from "./ShareModal";
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   bravos?: Record<string, number>;
   liked?: Set<string>;
   onBravo?: (personId: string, eventId: string, type: string, time: number) => void;
+  lastVisitDate?: string | null;
 }
 
 interface DedupedPR {
@@ -25,6 +26,7 @@ export default function PersonCard({
   bravos,
   liked,
   onBravo,
+  lastVisitDate,
 }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
@@ -169,6 +171,7 @@ export default function PersonCard({
             >
               {items.map((item, i) => {
                 const key = `${person.personId}:${item.pr.eventId}:${item.pr.type}:${item.pr.time}`;
+                const isNew = lastVisitDate ? item.pr.endDate > lastVisitDate : false;
                 return (
                   <PRBadge
                     key={`${item.pr.type}-${item.pr.competitionId}-${i}`}
@@ -177,6 +180,7 @@ export default function PersonCard({
                     prevTime={item.prevTime}
                     bravoCount={bravos?.[key] ?? 0}
                     isLiked={liked?.has(key) ?? false}
+                    isNew={isNew}
                     onBravo={
                       onBravo
                         ? () => onBravo(person.personId, item.pr.eventId, item.pr.type, item.pr.time)
@@ -248,6 +252,7 @@ function PRBadge({
   prevTime,
   bravoCount = 0,
   isLiked = false,
+  isNew = false,
   onBravo,
   onShare,
 }: {
@@ -256,9 +261,30 @@ function PRBadge({
   prevTime?: number;
   bravoCount?: number;
   isLiked?: boolean;
+  isNew?: boolean;
   onBravo?: () => void;
   onShare?: () => void;
 }) {
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const [seenInView, setSeenInView] = useState(false);
+
+  useEffect(() => {
+    if (!isNew || !badgeRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setSeenInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.8 }
+    );
+    observer.observe(badgeRef.current);
+    return () => observer.disconnect();
+  }, [isNew]);
+
+  const showNewBadge = isNew && !seenInView;
+
   const href = pr.liveUrl
     ? pr.liveUrl
     : `https://www.worldcubeassociation.org/persons/${personId}?event=${pr.eventId}`;
@@ -294,9 +320,16 @@ function PRBadge({
 
   return (
     <div
-      className={`group flex items-stretch rounded-lg w-full transition-colors overflow-hidden ${record ? "relative z-10" : ""} ${badgeColorClasses(isSingle, level)}`}
+      ref={badgeRef}
+      className={`group relative flex items-stretch rounded-lg w-full transition-colors overflow-hidden ${badgeColorClasses(isSingle, level)}`}
       style={{ ...badgeInlineStyle(isSingle, level), ...recordBorderStyle }}
     >
+      {showNewBadge && (
+        <span className="absolute top-1.5 left-1.5 text-[10px] font-bold text-white bg-green-500 rounded-full px-1.5 py-0.5 z-20 leading-none pointer-events-none">
+          NEW
+        </span>
+      )}
+
       {/* Left record stripe */}
       {record && (
         <div className="w-[10px] self-stretch shrink-0" style={{ background: recordStripe(record) }} />
@@ -309,7 +342,7 @@ function PRBadge({
         rel="noopener noreferrer"
         className="flex-1 px-3 py-2 min-w-0"
       >
-        {/* Row 1: icon + event + type (left) | competition name (right, truncated) */}
+        {/* Row 1: icon + event + type (left) | competition name + date (right) */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <div className="flex items-center gap-1 shrink-0">
             <span
@@ -326,6 +359,9 @@ function PRBadge({
           </div>
           <span className="text-xs text-gray-400 truncate min-w-0">
             {pr.competitionName}
+          </span>
+          <span className="text-xs text-gray-400 shrink-0 ml-auto whitespace-nowrap">
+            {formatPRDate(pr.endDate)}
           </span>
         </div>
 

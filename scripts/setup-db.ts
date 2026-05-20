@@ -230,6 +230,8 @@ async function main() {
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
 
+  await tryExec(`ALTER TABLE users ADD COLUMN last_feed_visit DATETIME DEFAULT NULL`);
+
   console.log("All tables created successfully.");
   await pool.end();
 }

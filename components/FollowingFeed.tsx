@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import type { PersonPRs } from "@/lib/queries";
 import PRList from "./PRList";
+import ChronologicalFeed from "./ChronologicalFeed";
 import DaysSelector from "./DaysSelector";
 import LoginModal from "./LoginModal";
 
@@ -32,6 +33,7 @@ interface AuthUser {
   wca_id: string | null;
   wca_name: string | null;
   wca_avatar_url: string | null;
+  last_feed_visit: string | null;
 }
 
 interface SearchResult {
@@ -41,6 +43,8 @@ interface SearchResult {
 }
 
 const FOLLOWING_KEY = "wca-following";
+const LAST_VISIT_KEY = "cubefeed_last_visit";
+const VIEW_MODE_KEY = "cubefeed_view_mode";
 const VALID_DAYS = [3, 7, 14, 30];
 const DEFAULT_DAYS = 7;
 
@@ -65,6 +69,14 @@ export default function FollowingFeed() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
+  const [lastVisitDate, setLastVisitDate] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"person" | "feed">("person");
+
+  useEffect(() => {
+    const saved = localStorage.getItem(VIEW_MODE_KEY);
+    if (saved === "feed") setViewMode("feed");
+  }, []);
+
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
@@ -74,6 +86,38 @@ export default function FollowingFeed() {
       })
       .catch(() => setAuthChecked(true));
   }, []);
+
+  // Load lastVisitDate: prefer DB value for logged-in users, fall back to localStorage
+  useEffect(() => {
+    if (!authChecked) return;
+    const local = localStorage.getItem(LAST_VISIT_KEY);
+    if (user?.last_feed_visit) {
+      const dbDate = user.last_feed_visit.slice(0, 10);
+      const localDate = local ? local.slice(0, 10) : null;
+      setLastVisitDate(localDate && localDate > dbDate ? localDate : dbDate);
+    } else if (local) {
+      setLastVisitDate(local.slice(0, 10));
+    }
+    // First visit: no lastVisitDate — save today so next visit shows diff
+    if (!local && !user?.last_feed_visit) {
+      localStorage.setItem(LAST_VISIT_KEY, new Date().toISOString().slice(0, 10));
+    }
+  }, [authChecked, user]);
+
+  // Save lastVisitDate when user leaves the page
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        const today = new Date().toISOString().slice(0, 10);
+        localStorage.setItem(LAST_VISIT_KEY, today);
+        if (user) {
+          fetch("/api/user/last-visit", { method: "PUT" }).catch(() => {});
+        }
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [user]);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -127,6 +171,19 @@ export default function FollowingFeed() {
     () => following.map((f) => f.wcaId).sort().join(","),
     [following]
   );
+
+  const newPRCount = useMemo(() => {
+    if (!lastVisitDate || !persons) return 0;
+    return persons.reduce(
+      (count, p) => count + p.prs.filter((pr) => pr.endDate > lastVisitDate).length,
+      0
+    );
+  }, [persons, lastVisitDate]);
+
+  function handleViewModeChange(mode: "person" | "feed") {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_MODE_KEY, mode);
+  }
 
   useEffect(() => {
     if (!hydrated) return;
@@ -215,7 +272,7 @@ export default function FollowingFeed() {
   function handleLoginSuccess(loggedInUser: { id: number; username: string }) {
     setShowLoginModal(false);
     const prevFollowing = following;
-    setUser({ ...loggedInUser, wca_id: null, wca_name: null, wca_avatar_url: null });
+    setUser({ ...loggedInUser, wca_id: null, wca_name: null, wca_avatar_url: null, last_feed_visit: null });
     setHydrated(false);
 
     fetch("/api/user/following")
@@ -276,6 +333,38 @@ export default function FollowingFeed() {
       {following.length > 0 && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 mt-6">
           <DaysSelector current={days} options={VALID_DAYS} />
+          {/* View toggle */}
+          <div className="flex gap-0.5 border border-gray-200 rounded-lg p-0.5 bg-gray-50 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("person")}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                viewMode === "person"
+                  ? "bg-white text-gray-800 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              Person
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("feed")}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                viewMode === "feed"
+                  ? "bg-white text-gray-800 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+              Feed
+            </button>
+          </div>
           {!loading && persons !== null && (
             <p className="text-sm text-gray-500">
               <span className="font-semibold text-gray-800">{totalPRs}</span> PRs from{" "}
@@ -287,17 +376,35 @@ export default function FollowingFeed() {
         </div>
       )}
 
+      {/* New PRs banner */}
+      {newPRCount > 0 && !loading && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+          <span className="font-semibold">{newPRCount} new PR{newPRCount !== 1 ? "s" : ""}</span>
+          <span>since your last visit</span>
+        </div>
+      )}
+
       {following.length > 0 && loading && <LoadingState />}
       {following.length > 0 && !loading && fetchError && <FetchErrorState />}
       {following.length > 0 && !loading && !fetchError && persons !== null && persons.length === 0 && (
         <NoPRsState days={days} />
       )}
       {following.length > 0 && !loading && !fetchError && persons && persons.length > 0 && (
-        <PRList
-          persons={persons}
-          isLoggedIn={user !== null}
-          onLoginRequired={() => setShowLoginModal(true)}
-        />
+        viewMode === "person" ? (
+          <PRList
+            persons={persons}
+            isLoggedIn={user !== null}
+            onLoginRequired={() => setShowLoginModal(true)}
+            lastVisitDate={lastVisitDate}
+          />
+        ) : (
+          <ChronologicalFeed
+            persons={persons}
+            lastVisitDate={lastVisitDate}
+            isLoggedIn={user !== null}
+            onLoginRequired={() => setShowLoginModal(true)}
+          />
+        )
       )}
 
       {showLoginModal && (

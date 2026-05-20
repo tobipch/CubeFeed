@@ -1,3 +1,14 @@
+export function formatPRDate(dateStr: string): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr + "T00:00:00");
+  const diffDays = Math.round((today.getTime() - d.getTime()) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays <= 6) return `${diffDays}d ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function formatTime(
   cs: number,
   eventId: string,
