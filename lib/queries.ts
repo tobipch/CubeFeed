@@ -7,6 +7,7 @@ export interface PRRow {
   competition_id: string;
   competition_name: string;
   city_name: string;
+  start_date: string;
   end_date: string;
   best: number;
   average: number;
@@ -35,6 +36,7 @@ export interface PR {
   competitionId: string;
   competitionName: string;
   cityName: string;
+  startDate: string;
   endDate: string;
   type: "single" | "average";
   time: number;
@@ -45,6 +47,7 @@ export interface PR {
   isLive?: boolean;
   liveUrl?: string;
   prevTime?: number;
+  firstSeenAt?: string;
 }
 
 // Read pre-computed results from pr_cache — populated by the import script.
@@ -75,8 +78,9 @@ export async function fetchPRsImpl(days: number): Promise<PersonPRs[]> {
       r.event_id,
       r.competition_id,
       COALESCE(c.name, r.competition_id) AS competition_name,
-      COALESCE(c.city_name, '')          AS city_name,
-      COALESCE(c.end_date, CURDATE())    AS end_date,
+      COALESCE(c.city_name, '')                          AS city_name,
+      COALESCE(c.start_date, c.end_date, CURDATE())      AS start_date,
+      COALESCE(c.end_date, CURDATE())                    AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -168,8 +172,9 @@ export async function fetchPRsForPersons(personIds: string[], days: number): Pro
       r.event_id,
       r.competition_id,
       COALESCE(c.name, r.competition_id) AS competition_name,
-      COALESCE(c.city_name, '')          AS city_name,
-      COALESCE(c.end_date, CURDATE())    AS end_date,
+      COALESCE(c.city_name, '')                          AS city_name,
+      COALESCE(c.start_date, c.end_date, CURDATE())      AS start_date,
+      COALESCE(c.end_date, CURDATE())                    AS end_date,
       r.best,
       r.average,
       r.regional_single_record,
@@ -301,6 +306,7 @@ function groupByPerson(rows: PRRow[]): PersonPRs[] {
         competitionId: row.competition_id,
         competitionName: row.competition_name,
         cityName: row.city_name,
+        startDate: row.start_date,
         endDate: row.end_date,
         type: "single",
         time: row.best,
@@ -318,6 +324,7 @@ function groupByPerson(rows: PRRow[]): PersonPRs[] {
         competitionId: row.competition_id,
         competitionName: row.competition_name,
         cityName: row.city_name,
+        startDate: row.start_date,
         endDate: row.end_date,
         type: "average",
         time: row.average,

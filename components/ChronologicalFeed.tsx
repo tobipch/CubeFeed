@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, typeLabel } from "@/lib/events";
-import { formatTime, formatPRDate } from "@/lib/format";
+import { formatTime, formatPRDate, effectivePRDate } from "@/lib/format";
 import { deduplicatePRs } from "@/lib/deduplicate";
 
 interface FeedItem {
@@ -71,18 +71,19 @@ export default function ChronologicalFeed({
       }
     }
     return items.sort((a, b) => {
-      const dateDiff = b.pr.endDate.localeCompare(a.pr.endDate);
+      const dateDiff = effectivePRDate(b.pr).localeCompare(effectivePRDate(a.pr));
       if (dateDiff !== 0) return dateDiff;
       return a.pr.time - b.pr.time;
     });
   }, [persons]);
 
-  // Group by endDate
+  // Group by effective date (firstSeenAt if known, else endDate)
   const grouped = useMemo(() => {
     const map = new Map<string, FeedItem[]>();
     for (const item of feedItems) {
-      if (!map.has(item.pr.endDate)) map.set(item.pr.endDate, []);
-      map.get(item.pr.endDate)!.push(item);
+      const date = effectivePRDate(item.pr);
+      if (!map.has(date)) map.set(date, []);
+      map.get(date)!.push(item);
     }
     return Array.from(map.entries());
   }, [feedItems]);
@@ -144,7 +145,7 @@ export default function ChronologicalFeed({
           <div className="space-y-2">
             {items.map((item, i) => {
               const key = bravoKey(item.personId, item.pr.eventId, item.pr.type, item.pr.time);
-              const isNew = lastVisitDate ? item.pr.endDate > lastVisitDate : false;
+              const isNew = lastVisitDate ? effectivePRDate(item.pr) > lastVisitDate : false;
               return (
                 <FeedCard
                   key={`${item.personId}-${item.pr.eventId}-${item.pr.type}-${item.pr.time}-${i}`}

@@ -1,4 +1,5 @@
 import type { PR } from "@/lib/queries";
+import { effectivePRDate } from "@/lib/format";
 
 export interface DedupedPR {
   pr: PR;
@@ -16,7 +17,7 @@ export function deduplicatePRs(prs: PR[]): DedupedPR[] {
   const result: DedupedPR[] = [];
   for (const group of Array.from(byEventType.values())) {
     const sorted = [...group].sort((a, b) => {
-      const dateDiff = b.endDate.localeCompare(a.endDate);
+      const dateDiff = effectivePRDate(b).localeCompare(effectivePRDate(a));
       if (dateDiff !== 0) return dateDiff;
       return a.time - b.time;
     });

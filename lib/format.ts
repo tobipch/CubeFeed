@@ -9,6 +9,42 @@ export function formatPRDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/**
+ * The date to treat as the PR's "actual" day. Prefers `firstSeenAt` (precise
+ * day from live detection) over `endDate` (only the last day of the comp).
+ */
+export function effectivePRDate(pr: { endDate: string; firstSeenAt?: string }): string {
+  return pr.firstSeenAt ? pr.firstSeenAt.slice(0, 10) : pr.endDate;
+}
+
+/**
+ * Renders the date for a PR card. Three cases:
+ *  - We know the exact day (firstSeenAt set by live detection) → relative format.
+ *  - Single-day competition → relative or absolute format.
+ *  - Multi-day competition without firstSeenAt → range like "May 17–19".
+ */
+export function formatPRDateForDisplay(pr: {
+  startDate?: string;
+  endDate: string;
+  firstSeenAt?: string;
+}): string {
+  if (pr.firstSeenAt) return formatPRDate(pr.firstSeenAt.slice(0, 10));
+  if (!pr.startDate || pr.startDate === pr.endDate) return formatPRDate(pr.endDate);
+  return formatDateRange(pr.startDate, pr.endDate);
+}
+
+function formatDateRange(startDate: string, endDate: string): string {
+  const start = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
+  if (startDate.slice(0, 7) === endDate.slice(0, 7)) {
+    const month = start.toLocaleDateString("en-US", { month: "short" });
+    return `${month} ${start.getDate()}–${end.getDate()}`;
+  }
+  const startStr = start.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const endStr = end.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${startStr} – ${endStr}`;
+}
+
 export function formatTime(
   cs: number,
   eventId: string,

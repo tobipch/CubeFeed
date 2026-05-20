@@ -232,6 +232,18 @@ async function main() {
 
   await tryExec(`ALTER TABLE users ADD COLUMN last_feed_visit DATETIME DEFAULT NULL`);
 
+  await exec(`
+    CREATE TABLE IF NOT EXISTS pr_first_seen (
+      person_id      VARCHAR(255) NOT NULL,
+      event_id       VARCHAR(255) NOT NULL,
+      type           VARCHAR(50)  NOT NULL,
+      time           INT          NOT NULL,
+      competition_id VARCHAR(255) NOT NULL,
+      first_seen_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (person_id, event_id, type, time, competition_id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
   console.log("All tables created successfully.");
   await pool.end();
 }

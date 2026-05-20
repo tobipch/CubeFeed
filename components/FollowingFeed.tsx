@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import type { PersonPRs } from "@/lib/queries";
+import { effectivePRDate } from "@/lib/format";
 import PRList from "./PRList";
 import ChronologicalFeed from "./ChronologicalFeed";
 import DaysSelector from "./DaysSelector";
@@ -175,7 +176,7 @@ export default function FollowingFeed() {
   const newPRCount = useMemo(() => {
     if (!lastVisitDate || !persons) return 0;
     return persons.reduce(
-      (count, p) => count + p.prs.filter((pr) => pr.endDate > lastVisitDate).length,
+      (count, p) => count + p.prs.filter((pr) => effectivePRDate(pr) > lastVisitDate).length,
       0
     );
   }, [persons, lastVisitDate]);

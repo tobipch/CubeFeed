@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { eventName, EVENT_ORDER, typeLabel } from "@/lib/events";
-import { formatTime, formatPRDate } from "@/lib/format";
+import { formatTime, formatPRDateForDisplay, effectivePRDate } from "@/lib/format";
+import { deduplicatePRs, type DedupedPR } from "@/lib/deduplicate";
 import ShareModal from "./ShareModal";
 
 interface Props {
@@ -13,11 +14,6 @@ interface Props {
   liked?: Set<string>;
   onBravo?: (personId: string, eventId: string, type: string, time: number) => void;
   lastVisitDate?: string | null;
-}
-
-interface DedupedPR {
-  pr: PR;
-  prevTime?: number;
 }
 
 export default function PersonCard({
@@ -42,29 +38,7 @@ export default function PersonCard({
       .catch(() => {});
   }, [person.personId]);
 
-  // Deduplicate: for each (eventId, type) keep the most recent PR; if same
-  // date, keep the better (lower) time. The displaced entry becomes prevTime.
-  const byEventType = new Map<string, PR[]>();
-  for (const pr of person.prs) {
-    const key = `${pr.eventId}:${pr.type}`;
-    if (!byEventType.has(key)) byEventType.set(key, []);
-    byEventType.get(key)!.push(pr);
-  }
-
-  const dedupedPRs: DedupedPR[] = [];
-  for (const prs of Array.from(byEventType.values())) {
-    const sorted = [...prs].sort((a, b) => {
-      const dateDiff = b.endDate.localeCompare(a.endDate);
-      if (dateDiff !== 0) return dateDiff;
-      return a.time - b.time;
-    });
-    const current = sorted[0];
-    const prevTime =
-      sorted.length > 1 && sorted[1].competitionId !== sorted[0].competitionId
-        ? sorted[1].time
-        : current.prevTime;
-    dedupedPRs.push({ pr: current, prevTime });
-  }
+  const dedupedPRs = deduplicatePRs(person.prs);
 
   // Re-group by eventId for row display
   const byEvent = new Map<string, DedupedPR[]>();
@@ -171,7 +145,7 @@ export default function PersonCard({
             >
               {items.map((item, i) => {
                 const key = `${person.personId}:${item.pr.eventId}:${item.pr.type}:${item.pr.time}`;
-                const isNew = lastVisitDate ? item.pr.endDate > lastVisitDate : false;
+                const isNew = lastVisitDate ? effectivePRDate(item.pr) > lastVisitDate : false;
                 return (
                   <PRBadge
                     key={`${item.pr.type}-${item.pr.competitionId}-${i}`}
@@ -361,7 +335,7 @@ function PRBadge({
             {pr.competitionName}
           </span>
           <span className="text-xs text-gray-400 shrink-0 ml-auto whitespace-nowrap">
-            {formatPRDate(pr.endDate)}
+            {formatPRDateForDisplay(pr)}
           </span>
         </div>
 

@@ -400,6 +400,7 @@ async function processCompetitionForPersons(
   if (followedCompetitors.length === 0) return;
 
   const endDate = detail.end_date ?? detail.start_date;
+  const startDate = detail.start_date;
   const compName = detail.name;
 
   for (let i = 0; i < followedCompetitors.length; i += PERSON_BATCH_SIZE) {
@@ -438,6 +439,7 @@ async function processCompetitionForPersons(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "single",
             time: entry.best,
@@ -462,6 +464,7 @@ async function processCompetitionForPersons(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "average",
             time: entry.average,
@@ -500,6 +503,7 @@ async function processCompetition(
 
   const wcaCompId = detail.wca_id ?? `live-${comp.id}`;
   const endDate = detail.end_date ?? detail.start_date;
+  const startDate = detail.start_date;
   const compName = detail.name;
 
   for (let i = 0; i < competitors.length; i += PERSON_BATCH_SIZE) {
@@ -529,6 +533,7 @@ async function processCompetition(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "single",
             time: entry.best,
@@ -547,6 +552,7 @@ async function processCompetition(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "average",
             time: entry.average,
