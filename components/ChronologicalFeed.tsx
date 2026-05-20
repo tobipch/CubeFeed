@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { formatPRDate, effectivePRDate } from "@/lib/format";
 import { deduplicatePRs } from "@/lib/deduplicate";
 import PRBadge from "./PRBadge";
 import ShareModal from "./ShareModal";
+
+const PAGE_SIZE = 20;
 
 interface FeedItem {
   personId: string;
@@ -47,6 +49,8 @@ export default function ChronologicalFeed({
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [avatarMap, setAvatarMap] = useState<Record<string, string>>({});
   const [shareItem, setShareItem] = useState<FeedItem | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/bravos")
@@ -91,16 +95,42 @@ export default function ChronologicalFeed({
     });
   }, [persons]);
 
+  // Reset paging when the underlying data changes
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [persons]);
+
+  const visibleItems = useMemo(
+    () => feedItems.slice(0, visibleCount),
+    [feedItems, visibleCount],
+  );
+
   // Group by effective date (firstSeenAt if known, else endDate)
   const grouped = useMemo(() => {
     const map = new Map<string, FeedItem[]>();
-    for (const item of feedItems) {
+    for (const item of visibleItems) {
       const date = effectivePRDate(item.pr);
       if (!map.has(date)) map.set(date, []);
       map.get(date)!.push(item);
     }
     return Array.from(map.entries());
-  }, [feedItems]);
+  }, [visibleItems]);
+
+  const hasMore = visibleCount < feedItems.length;
+
+  useEffect(() => {
+    if (!hasMore || !loadMoreRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((c) => Math.min(c + PAGE_SIZE, feedItems.length));
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, feedItems.length]);
 
   const handleBravo = async (personId: string, eventId: string, type: string, time: number) => {
     if (!isLoggedIn) {
@@ -183,6 +213,12 @@ export default function ChronologicalFeed({
           </div>
         );
       })}
+
+      {hasMore && (
+        <div ref={loadMoreRef} className="py-6 flex justify-center">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
 
       {sharePersonData && (
         <ShareModal

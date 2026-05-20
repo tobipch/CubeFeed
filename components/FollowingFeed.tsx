@@ -48,6 +48,7 @@ const LAST_VISIT_KEY = "cubefeed_last_visit";
 const VIEW_MODE_KEY = "cubefeed_view_mode";
 const VALID_DAYS = [3, 7, 14, 30];
 const DEFAULT_DAYS = 7;
+const FEED_DAYS = 30;
 
 function flagEmoji(iso2: string | undefined): string {
   if (!iso2 || iso2.length !== 2) return "";
@@ -72,6 +73,8 @@ export default function FollowingFeed() {
 
   const [lastVisitDate, setLastVisitDate] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"person" | "feed">("person");
+
+  const effectiveDays = viewMode === "feed" ? FEED_DAYS : days;
 
   useEffect(() => {
     const saved = localStorage.getItem(VIEW_MODE_KEY);
@@ -198,7 +201,7 @@ export default function FollowingFeed() {
     setFetchError(false);
 
     const controller = new AbortController();
-    fetch(`/api/feed?ids=${encodeURIComponent(idsKey)}&days=${days}`, {
+    fetch(`/api/feed?ids=${encodeURIComponent(idsKey)}&days=${effectiveDays}`, {
       signal: controller.signal,
     })
       .then((r) => {
@@ -232,7 +235,7 @@ export default function FollowingFeed() {
 
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, days, hydrated]);
+  }, [idsKey, effectiveDays, hydrated]);
 
   const addPerson = useCallback(
     (person: FollowedPerson) => {
@@ -333,7 +336,7 @@ export default function FollowingFeed() {
 
       {following.length > 0 && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 mt-6">
-          <DaysSelector current={days} options={VALID_DAYS} />
+          {viewMode === "person" && <DaysSelector current={days} options={VALID_DAYS} />}
           {/* View toggle */}
           <div className="flex gap-0.5 border border-gray-200 rounded-lg p-0.5 bg-gray-50 shrink-0">
             <button
@@ -371,7 +374,7 @@ export default function FollowingFeed() {
               <span className="font-semibold text-gray-800">{totalPRs}</span> PRs from{" "}
               <span className="font-semibold text-gray-800">{cubersWithPRs}</span> cuber{cubersWithPRs !== 1 ? "s" : ""}{" "}
               in the last{" "}
-              <span className="font-semibold text-gray-800">{days}</span> days
+              <span className="font-semibold text-gray-800">{effectiveDays}</span> days
             </p>
           )}
         </div>
@@ -388,7 +391,7 @@ export default function FollowingFeed() {
       {following.length > 0 && loading && <LoadingState />}
       {following.length > 0 && !loading && fetchError && <FetchErrorState />}
       {following.length > 0 && !loading && !fetchError && persons !== null && persons.length === 0 && (
-        <NoPRsState days={days} />
+        <NoPRsState days={effectiveDays} />
       )}
       {following.length > 0 && !loading && !fetchError && persons && persons.length > 0 && (
         viewMode === "person" ? (
