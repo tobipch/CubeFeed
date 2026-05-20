@@ -237,8 +237,7 @@ async function main() {
   for (const table of ["ranks_single", "ranks_average"] as const) {
     await tryExec(
       `UPDATE ${table} r
-       JOIN persons p ON r.person_id = p.wca_id AND p.sub_id = 1
-       JOIN countries c ON p.country_id = c.id
+       JOIN countries c ON r.country_id = c.id
        SET r.continent_id = c.continent_id
        WHERE r.continent_id IS NULL OR r.continent_id = ''`
     );
