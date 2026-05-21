@@ -393,49 +393,49 @@ export async function getVirtualAllRanks(
 
   const result = new Map<string, VirtualRanks>();
 
-  for (const pr of prs) {
-    const table = pr.type === "single" ? "ranks_single" : "ranks_average";
-    const key = `${pr.eventId}:${pr.type}:${pr.time}:${pr.countryId}`;
-    try {
-      const [wrRows, crRows, nrRows] = await Promise.all([
-        query<{ wr: number }>(
-          `SELECT 1 + COUNT(*) AS wr FROM ${table}
-           WHERE event_id = ? AND best < ? AND best > 0`,
-          [pr.eventId, pr.time]
-        ),
-        pr.continentId
-          ? query<{ cr: number; total: number }>(
-              `SELECT
-                 1 + SUM(CASE WHEN best < ? AND best > 0 THEN 1 ELSE 0 END) AS cr,
-                 SUM(CASE WHEN best > 0 THEN 1 ELSE 0 END) AS total
-               FROM ${table}
-               WHERE event_id = ? AND continent_id = ?`,
-              [pr.time, pr.eventId, pr.continentId]
-            )
-          : Promise.resolve([] as { cr: number; total: number }[]),
-        query<{ nr: number; total: number }>(
-          `SELECT
-             1 + SUM(CASE WHEN best < ? AND best > 0 THEN 1 ELSE 0 END) AS nr,
-             SUM(CASE WHEN best > 0 THEN 1 ELSE 0 END) AS total
-           FROM ${table}
-           WHERE event_id = ? AND country_id = ?`,
-          [pr.time, pr.eventId, pr.countryId]
-        ),
-      ]);
-      // Only trust regional ranks when the region actually has data for the event.
-      // Otherwise a missing/mismatched continent_id or country_id makes the count
-      // query return 0, yielding a bogus rank-1.
-      const crTotal = Number(crRows[0]?.total ?? 0);
-      const nrTotal = Number(nrRows[0]?.total ?? 0);
-      result.set(key, {
-        wr: wrRows[0]?.wr ?? null,
-        cr: crTotal > 0 ? Number(crRows[0]!.cr) : null,
-        nr: nrTotal > 0 ? Number(nrRows[0]!.nr) : null,
-      });
-    } catch {
-      // ignore
-    }
-  }
+  // Run all PR rank lookups in parallel (3 DB queries per PR, all concurrent).
+  await Promise.all(
+    prs.map(async (pr) => {
+      const table = pr.type === "single" ? "ranks_single" : "ranks_average";
+      const key = `${pr.eventId}:${pr.type}:${pr.time}:${pr.countryId}`;
+      try {
+        const [wrRows, crRows, nrRows] = await Promise.all([
+          query<{ wr: number }>(
+            `SELECT 1 + COUNT(*) AS wr FROM ${table}
+             WHERE event_id = ? AND best < ? AND best > 0`,
+            [pr.eventId, pr.time]
+          ),
+          pr.continentId
+            ? query<{ cr: number; total: number }>(
+                `SELECT
+                   1 + SUM(CASE WHEN best < ? AND best > 0 THEN 1 ELSE 0 END) AS cr,
+                   SUM(CASE WHEN best > 0 THEN 1 ELSE 0 END) AS total
+                 FROM ${table}
+                 WHERE event_id = ? AND continent_id = ?`,
+                [pr.time, pr.eventId, pr.continentId]
+              )
+            : Promise.resolve([] as { cr: number; total: number }[]),
+          query<{ nr: number; total: number }>(
+            `SELECT
+               1 + SUM(CASE WHEN best < ? AND best > 0 THEN 1 ELSE 0 END) AS nr,
+               SUM(CASE WHEN best > 0 THEN 1 ELSE 0 END) AS total
+             FROM ${table}
+             WHERE event_id = ? AND country_id = ?`,
+            [pr.time, pr.eventId, pr.countryId]
+          ),
+        ]);
+        const crTotal = Number(crRows[0]?.total ?? 0);
+        const nrTotal = Number(nrRows[0]?.total ?? 0);
+        result.set(key, {
+          wr: wrRows[0]?.wr ?? null,
+          cr: crTotal > 0 ? Number(crRows[0]!.cr) : null,
+          nr: nrTotal > 0 ? Number(nrRows[0]!.nr) : null,
+        });
+      } catch {
+        // ignore
+      }
+    })
+  );
 
   return result;
 }
@@ -450,20 +450,22 @@ export async function getPrevBestsFromResults(
 ): Promise<Map<string, number>> {
   if (pairs.length === 0) return new Map();
   const result = new Map<string, number>();
-  for (const { personId, eventId, currentBest, type } of pairs) {
-    const col = type === "single" ? "best" : "average";
-    try {
-      const rows = await query<{ prev: number }>(
-        `SELECT MIN(${col}) AS prev FROM results
-         WHERE person_id = ? AND event_id = ? AND ${col} > ? AND ${col} > 0`,
-        [personId, eventId, currentBest]
-      );
-      const prev = rows[0]?.prev;
-      if (prev) result.set(`${personId}:${eventId}:${type}`, prev);
-    } catch {
-      // ignore
-    }
-  }
+  await Promise.all(
+    pairs.map(async ({ personId, eventId, currentBest, type }) => {
+      const col = type === "single" ? "best" : "average";
+      try {
+        const rows = await query<{ prev: number }>(
+          `SELECT MIN(${col}) AS prev FROM results
+           WHERE person_id = ? AND event_id = ? AND ${col} > ? AND ${col} > 0`,
+          [personId, eventId, currentBest]
+        );
+        const prev = rows[0]?.prev;
+        if (prev) result.set(`${personId}:${eventId}:${type}`, prev);
+      } catch {
+        // ignore
+      }
+    })
+  );
   return result;
 }
 

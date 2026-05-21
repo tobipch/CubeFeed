@@ -12,6 +12,7 @@
  * gracefully when WCA Live is unavailable.
  */
 
+import { unstable_cache } from "next/cache";
 import { getVirtualAllRanks, getPersonLocations, getRanksForPersons, getPrevBestsFromResults } from "./queries";
 import type { PersonPRs, PR, RankMap } from "./queries";
 
@@ -294,6 +295,33 @@ export async function fetchLivePRs(
 
 // ─── Custom following variant ─────────────────────────────────────────────────
 
+// Cache WCA Live competition list for 10 minutes — the list changes slowly
+// and is the same for all users, so sharing it across requests is safe.
+const getCachedCompetitions = unstable_cache(
+  async (from: string): Promise<GqlCompetition[]> => {
+    const data = await graphql<{ competitions: GqlCompetition[] }>(
+      COMPETITIONS_QUERY,
+      { from }
+    );
+    return data.competitions ?? [];
+  },
+  ["wca-live-competitions"],
+  { revalidate: 600 }
+);
+
+// Cache competition detail (competitor list) for 5 minutes.
+const getCachedCompetitionDetail = unstable_cache(
+  async (compId: string): Promise<GqlCompetitionWithCompetitors | null> => {
+    const data = await graphql<{ competition: GqlCompetitionWithCompetitors }>(
+      COMPETITION_COMPETITORS_QUERY,
+      { id: compId }
+    );
+    return data.competition ?? null;
+  },
+  ["wca-live-competition-detail"],
+  { revalidate: 300 }
+);
+
 export async function fetchLivePRsForPersons(
   personIds: string[],
   days: number,
@@ -306,11 +334,7 @@ export async function fetchLivePRsForPersons(
 
   let competitions: GqlCompetition[];
   try {
-    const data = await graphql<{ competitions: GqlCompetition[] }>(
-      COMPETITIONS_QUERY,
-      { from }
-    );
-    competitions = data.competitions ?? [];
+    competitions = await getCachedCompetitions(from);
   } catch {
     return [];
   }
@@ -376,13 +400,9 @@ async function processCompetitionForPersons(
   ranks: RankMap,
   personMap: Map<string, PersonPRs>
 ): Promise<void> {
-  let detail: GqlCompetitionWithCompetitors | undefined;
+  let detail: GqlCompetitionWithCompetitors | null;
   try {
-    const data = await graphql<{ competition: GqlCompetitionWithCompetitors }>(
-      COMPETITION_COMPETITORS_QUERY,
-      { id: comp.id }
-    );
-    detail = data.competition;
+    detail = await getCachedCompetitionDetail(comp.id);
   } catch {
     return;
   }

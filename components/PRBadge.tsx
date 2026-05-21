@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
 import type { PR } from "@/lib/queries";
 import { eventName, typeLabel } from "@/lib/events";
 import { formatTime, formatPRDateForDisplay } from "@/lib/format";
@@ -11,7 +10,6 @@ export default function PRBadge({
   prevTime,
   bravoCount = 0,
   isLiked = false,
-  isNew = false,
   onBravo,
   onShare,
 }: {
@@ -20,39 +18,9 @@ export default function PRBadge({
   prevTime?: number;
   bravoCount?: number;
   isLiked?: boolean;
-  isNew?: boolean;
   onBravo?: () => void;
   onShare?: () => void;
 }) {
-  const badgeRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const [seenInView, setSeenInView] = useState(false);
-
-  useEffect(() => {
-    if (!isNew) return;
-    // Delay before observing so badges visible on initial load stay shown
-    // briefly; elements scrolled into view after the delay fade out normally.
-    const timer = setTimeout(() => {
-      if (!badgeRef.current) return;
-      const obs = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting) {
-            setSeenInView(true);
-            obs.disconnect();
-          }
-        },
-        { threshold: 0.8 }
-      );
-      obs.observe(badgeRef.current);
-      observerRef.current = obs;
-    }, 1500);
-    return () => {
-      clearTimeout(timer);
-      observerRef.current?.disconnect();
-    };
-  }, [isNew]);
-
-  const showNewBadge = isNew && !seenInView;
 
   const href = pr.liveUrl
     ? pr.liveUrl
@@ -89,15 +57,9 @@ export default function PRBadge({
 
   return (
     <div
-      ref={badgeRef}
       className={`group relative flex items-stretch rounded-lg w-full transition-colors overflow-hidden ${badgeColorClasses(isSingle, level)}`}
       style={{ ...badgeInlineStyle(isSingle, level), ...recordBorderStyle }}
     >
-      {showNewBadge && (
-        <span className="absolute top-1.5 left-1.5 text-[10px] font-bold text-white bg-green-500 rounded-full px-1.5 py-0.5 z-20 leading-none pointer-events-none">
-          NEW
-        </span>
-      )}
 
       {/* Left record stripe */}
       {record && (

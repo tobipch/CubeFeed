@@ -20,13 +20,19 @@ function bravoKey(personId: string, eventId: string, type: string, time: number)
   return `${personId}:${eventId}:${type}:${time}`;
 }
 
+// Groups consecutive items that share the same person AND competition into one card.
 function groupConsecutive(items: FeedItem[]): FeedItem[][] {
   const runs: FeedItem[][] = [];
   for (const item of items) {
-    if (runs.length === 0 || runs[runs.length - 1][0].personId !== item.personId) {
-      runs.push([item]);
+    const last = runs[runs.length - 1];
+    if (
+      last &&
+      last[0].personId === item.personId &&
+      last[0].pr.competitionId === item.pr.competitionId
+    ) {
+      last.push(item);
     } else {
-      runs[runs.length - 1].push(item);
+      runs.push([item]);
     }
   }
   return runs;
@@ -34,14 +40,12 @@ function groupConsecutive(items: FeedItem[]): FeedItem[][] {
 
 interface Props {
   persons: PersonPRs[];
-  lastVisitDate?: string | null;
   isLoggedIn?: boolean;
   onLoginRequired?: () => void;
 }
 
 export default function ChronologicalFeed({
   persons,
-  lastVisitDate,
   isLoggedIn,
   onLoginRequired,
 }: Props) {
@@ -89,8 +93,14 @@ export default function ChronologicalFeed({
       }
     }
     return items.sort((a, b) => {
+      // Primary: newest effective date first
       const dateDiff = effectivePRDate(b.pr).localeCompare(effectivePRDate(a.pr));
       if (dateDiff !== 0) return dateDiff;
+      // Secondary: group by person so all of one person's PRs from the same comp
+      // are consecutive (then groupConsecutive can merge them into one card)
+      const personDiff = a.personId.localeCompare(b.personId);
+      if (personDiff !== 0) return personDiff;
+      // Tertiary: within same person+date, sort by time ascending
       return a.pr.time - b.pr.time;
     });
   }, [persons]);
@@ -204,7 +214,6 @@ export default function ChronologicalFeed({
                   avatarUrl={avatarMap[runItems[0].personId] ?? null}
                   bravos={bravos}
                   liked={liked}
-                  lastVisitDate={lastVisitDate}
                   onBravo={handleBravo}
                   onShare={setShareItem}
                 />
@@ -237,7 +246,6 @@ function FeedRow({
   avatarUrl,
   bravos,
   liked,
-  lastVisitDate,
   onBravo,
   onShare,
 }: {
@@ -245,7 +253,6 @@ function FeedRow({
   avatarUrl: string | null;
   bravos: Record<string, number>;
   liked: Set<string>;
-  lastVisitDate?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   onBravo: (personId: string, eventId: string, type: string, time: number) => void | Promise<void>;
   onShare: (item: FeedItem) => void;
@@ -281,7 +288,6 @@ function FeedRow({
       <div className="px-3 py-2 flex flex-col gap-1.5">
         {items.map((item) => {
           const key = bravoKey(item.personId, item.pr.eventId, item.pr.type, item.pr.time);
-          const isNew = lastVisitDate ? effectivePRDate(item.pr) > lastVisitDate : false;
           return (
             <PRBadge
               key={`${item.pr.eventId}-${item.pr.type}-${item.pr.time}`}
@@ -290,7 +296,6 @@ function FeedRow({
               prevTime={item.prevTime}
               bravoCount={bravos[key] ?? 0}
               isLiked={liked.has(key)}
-              isNew={isNew}
               onBravo={() => onBravo(item.personId, item.pr.eventId, item.pr.type, item.pr.time)}
               onShare={() => onShare(item)}
             />

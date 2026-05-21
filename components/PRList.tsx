@@ -14,10 +14,9 @@ interface Props {
   persons: PersonPRs[];
   isLoggedIn?: boolean;
   onLoginRequired?: () => void;
-  lastVisitDate?: string | null;
 }
 
-export default function PRList({ persons, isLoggedIn, onLoginRequired, lastVisitDate }: Props) {
+export default function PRList({ persons, isLoggedIn, onLoginRequired }: Props) {
   const [selectedEvent, setSelectedEvent] = useState<string>("all");
   const [bravos, setBravos] = useState<Record<string, number>>({});
   const [liked, setLiked] = useState<Set<string>>(new Set());
@@ -139,7 +138,6 @@ export default function PRList({ persons, isLoggedIn, onLoginRequired, lastVisit
             bravos={bravos}
             liked={liked}
             onBravo={handleBravo}
-            lastVisitDate={lastVisitDate}
           />
         ))}
       </div>

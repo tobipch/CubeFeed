@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { EVENT_ORDER } from "@/lib/events";
-import { effectivePRDate } from "@/lib/format";
 import { deduplicatePRs, type DedupedPR } from "@/lib/deduplicate";
 import PRBadge, { ShareIcon } from "./PRBadge";
 import ShareModal from "./ShareModal";
@@ -14,7 +13,6 @@ interface Props {
   bravos?: Record<string, number>;
   liked?: Set<string>;
   onBravo?: (personId: string, eventId: string, type: string, time: number) => void;
-  lastVisitDate?: string | null;
 }
 
 export default function PersonCard({
@@ -23,7 +21,6 @@ export default function PersonCard({
   bravos,
   liked,
   onBravo,
-  lastVisitDate,
 }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
@@ -146,7 +143,6 @@ export default function PersonCard({
             >
               {items.map((item, i) => {
                 const key = `${person.personId}:${item.pr.eventId}:${item.pr.type}:${item.pr.time}`;
-                const isNew = lastVisitDate ? effectivePRDate(item.pr) > lastVisitDate : false;
                 return (
                   <PRBadge
                     key={`${item.pr.type}-${item.pr.competitionId}-${i}`}
@@ -155,7 +151,6 @@ export default function PersonCard({
                     prevTime={item.prevTime}
                     bravoCount={bravos?.[key] ?? 0}
                     isLiked={liked?.has(key) ?? false}
-                    isNew={isNew}
                     onBravo={
                       onBravo
                         ? () => onBravo(person.personId, item.pr.eventId, item.pr.type, item.pr.time)

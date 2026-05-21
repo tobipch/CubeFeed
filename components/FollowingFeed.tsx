@@ -399,12 +399,10 @@ export default function FollowingFeed() {
             persons={persons}
             isLoggedIn={user !== null}
             onLoginRequired={() => setShowLoginModal(true)}
-            lastVisitDate={lastVisitDate}
           />
         ) : (
           <ChronologicalFeed
             persons={persons}
-            lastVisitDate={lastVisitDate}
             isLoggedIn={user !== null}
             onLoginRequired={() => setShowLoginModal(true)}
           />
