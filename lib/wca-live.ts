@@ -12,8 +12,13 @@
  * gracefully when WCA Live is unavailable.
  */
 
-import { getVirtualAllRanks, getPersonLocations, getRanksForPersons, getPrevBestsFromResults } from "./queries";
+import { unstable_cache } from "next/cache";
+import {
+  getVirtualAllRanks, getPersonLocations, getRanksForPersons,
+  getPrevBestsFromResults, getKnownCompetitionsByPerson,
+} from "./queries";
 import type { PersonPRs, PR, RankMap } from "./queries";
+import { query, execute } from "./db";
 
 const WCA_LIVE_API = "https://live.worldcubeassociation.org/api";
 const FETCH_TIMEOUT_MS = 8_000;
@@ -294,7 +299,126 @@ export async function fetchLivePRs(
 
 // ─── Custom following variant ─────────────────────────────────────────────────
 
+// Cache WCA Live competition list for 10 minutes — the list changes slowly
+// and is the same for all users, so sharing it across requests is safe.
+const getCachedCompetitions = unstable_cache(
+  async (from: string): Promise<GqlCompetition[]> => {
+    const data = await graphql<{ competitions: GqlCompetition[] }>(
+      COMPETITIONS_QUERY,
+      { from }
+    );
+    return data.competitions ?? [];
+  },
+  ["wca-live-competitions"],
+  { revalidate: 600 }
+);
+
+// Cache competition detail (competitor list) for 5 minutes.
+const getCachedCompetitionDetail = unstable_cache(
+  async (compId: string): Promise<GqlCompetitionWithCompetitors | null> => {
+    const data = await graphql<{ competition: GqlCompetitionWithCompetitors }>(
+      COMPETITION_COMPETITORS_QUERY,
+      { id: compId }
+    );
+    return data.competition ?? null;
+  },
+  ["wca-live-competition-detail"],
+  { revalidate: 300 }
+);
+
+/**
+ * Cache-first wrapper: reads pre-fetched results from wca_live_persons if the
+ * background job has run recently (< 10 min). Falls back to direct WCA Live
+ * API calls when the cache is stale or the table is missing.
+ */
 export async function fetchLivePRsForPersons(
+  personIds: string[],
+  days: number,
+  knownCompsByPerson: Map<string, Set<string>>,
+  ranks: RankMap
+): Promise<PersonPRs[]> {
+  if (personIds.length === 0) return [];
+  try {
+    const meta = await query<{ updated_at: Date }>(
+      "SELECT updated_at FROM import_metadata WHERE `key` = 'wca_live_refreshed_at'"
+    );
+    const ageMs = meta[0]
+      ? Date.now() - new Date(meta[0].updated_at).getTime()
+      : Infinity;
+    if (ageMs < 10 * 60 * 1000) {
+      return fetchLivePRsFromCache(personIds, knownCompsByPerson);
+    }
+  } catch { /* fall through */ }
+  return fetchLivePRsDirect(personIds, days, knownCompsByPerson, ranks);
+}
+
+async function fetchLivePRsFromCache(
+  personIds: string[],
+  knownCompsByPerson: Map<string, Set<string>>
+): Promise<PersonPRs[]> {
+  const placeholders = personIds.map(() => "?").join(", ");
+  const rows = await query<{ wca_id: string; person_name: string; prs_json: string }>(
+    `SELECT wca_id, person_name, prs_json FROM wca_live_persons WHERE wca_id IN (${placeholders})`,
+    personIds
+  );
+  return rows
+    .map((r) => {
+      const allPrs = JSON.parse(r.prs_json) as PR[];
+      const prs = allPrs.filter(
+        (pr) => !knownCompsByPerson.get(r.wca_id)?.has(pr.competitionId)
+      );
+      return { personId: r.wca_id, personName: r.person_name, prs };
+    })
+    .filter((p) => p.prs.length > 0);
+}
+
+/**
+ * Fetches live PRs for all globally-followed persons and stores them in
+ * wca_live_persons so the feed API can read from DB instead of WCA Live.
+ * Called by the /api/cron/wca-live route every few minutes.
+ */
+export async function populateLiveCache(): Promise<{ updated: number }> {
+  const followed = await query<{ wca_id: string }>(
+    "SELECT DISTINCT wca_id FROM user_following"
+  );
+  if (followed.length === 0) {
+    await markCacheRefreshed();
+    return { updated: 0 };
+  }
+
+  const allIds = followed.map((r) => r.wca_id);
+  const [knownCompsByPerson, ranks] = await Promise.all([
+    getKnownCompetitionsByPerson(allIds).catch(() => new Map<string, Set<string>>()),
+    getRanksForPersons(allIds).catch(() => ({
+      single: new Map<string, number>(),
+      average: new Map<string, number>(),
+    })),
+  ]);
+
+  const results = await fetchLivePRsDirect(allIds, 3, knownCompsByPerson, ranks);
+
+  if (results.length > 0) {
+    const vals = results.map(() => "(?, ?, ?, NOW())").join(", ");
+    const params = results.flatMap((p) => [p.personId, p.personName, JSON.stringify(p.prs)]);
+    await execute(
+      `INSERT INTO wca_live_persons (wca_id, person_name, prs_json, fetched_at) VALUES ${vals}
+       ON DUPLICATE KEY UPDATE person_name = VALUES(person_name), prs_json = VALUES(prs_json), fetched_at = NOW()`,
+      params
+    );
+  }
+
+  await markCacheRefreshed();
+  return { updated: results.length };
+}
+
+async function markCacheRefreshed(): Promise<void> {
+  await execute(
+    `INSERT INTO import_metadata (\`key\`, value, updated_at) VALUES ('wca_live_refreshed_at', 'ok', NOW())
+     ON DUPLICATE KEY UPDATE value = 'ok', updated_at = NOW()`
+  );
+}
+
+async function fetchLivePRsDirect(
   personIds: string[],
   days: number,
   knownCompsByPerson: Map<string, Set<string>>,
@@ -306,22 +430,22 @@ export async function fetchLivePRsForPersons(
 
   let competitions: GqlCompetition[];
   try {
-    const data = await graphql<{ competitions: GqlCompetition[] }>(
-      COMPETITIONS_QUERY,
-      { from }
-    );
-    competitions = data.competitions ?? [];
+    competitions = await getCachedCompetitions(from);
   } catch {
     return [];
   }
 
+  // Skip competitions that ended more than 3 days ago — those results should
+  // already be in the WCA DB export by now, so live-fetching them is wasted work.
+  const recentCutoff = isoDateMinus(3);
+
   // Include a competition if it has no wca_id (never in DB) OR if at least one
   // followed person doesn't yet have DB results for it.
-  const liveComps = competitions.filter(
-    (c) =>
-      !c.wca_id ||
-      personIds.some((id) => !knownCompsByPerson.get(id)?.has(c.wca_id!))
-  );
+  const liveComps = competitions.filter((c) => {
+    const endDate = c.end_date ?? c.start_date;
+    if (endDate < recentCutoff) return false;
+    return !c.wca_id || personIds.some((id) => !knownCompsByPerson.get(id)?.has(c.wca_id!));
+  });
   if (liveComps.length === 0) return [];
 
   const personMap = new Map<string, PersonPRs>();
@@ -376,13 +500,9 @@ async function processCompetitionForPersons(
   ranks: RankMap,
   personMap: Map<string, PersonPRs>
 ): Promise<void> {
-  let detail: GqlCompetitionWithCompetitors | undefined;
+  let detail: GqlCompetitionWithCompetitors | null;
   try {
-    const data = await graphql<{ competition: GqlCompetitionWithCompetitors }>(
-      COMPETITION_COMPETITORS_QUERY,
-      { id: comp.id }
-    );
-    detail = data.competition;
+    detail = await getCachedCompetitionDetail(comp.id);
   } catch {
     return;
   }
@@ -400,6 +520,7 @@ async function processCompetitionForPersons(
   if (followedCompetitors.length === 0) return;
 
   const endDate = detail.end_date ?? detail.start_date;
+  const startDate = detail.start_date;
   const compName = detail.name;
 
   for (let i = 0; i < followedCompetitors.length; i += PERSON_BATCH_SIZE) {
@@ -438,6 +559,7 @@ async function processCompetitionForPersons(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "single",
             time: entry.best,
@@ -462,6 +584,7 @@ async function processCompetitionForPersons(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "average",
             time: entry.average,
@@ -500,6 +623,7 @@ async function processCompetition(
 
   const wcaCompId = detail.wca_id ?? `live-${comp.id}`;
   const endDate = detail.end_date ?? detail.start_date;
+  const startDate = detail.start_date;
   const compName = detail.name;
 
   for (let i = 0; i < competitors.length; i += PERSON_BATCH_SIZE) {
@@ -529,6 +653,7 @@ async function processCompetition(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "single",
             time: entry.best,
@@ -547,6 +672,7 @@ async function processCompetition(
             competitionId: wcaCompId,
             competitionName: compName,
             cityName: "",
+            startDate,
             endDate,
             type: "average",
             time: entry.average,

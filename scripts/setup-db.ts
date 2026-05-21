@@ -230,6 +230,41 @@ async function main() {
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
 
+  await tryExec(`ALTER TABLE users ADD COLUMN last_feed_visit DATETIME DEFAULT NULL`);
+
+  // Backfill any NULL/empty continent_id values left behind by older imports.
+  // Safe to run repeatedly; only touches rows that are still missing the value.
+  for (const table of ["ranks_single", "ranks_average"] as const) {
+    await tryExec(
+      `UPDATE ${table} r
+       JOIN countries c ON r.country_id = c.id
+       SET r.continent_id = c.continent_id
+       WHERE r.continent_id IS NULL OR r.continent_id = ''`
+    );
+  }
+
+  await exec(`
+    CREATE TABLE IF NOT EXISTS pr_first_seen (
+      person_id      VARCHAR(20)  NOT NULL,
+      event_id       VARCHAR(32)  NOT NULL,
+      type           VARCHAR(16)  NOT NULL,
+      time           INT          NOT NULL,
+      competition_id VARCHAR(64)  NOT NULL,
+      first_seen_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (person_id, event_id, type, time, competition_id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
+  await exec(`
+    CREATE TABLE IF NOT EXISTS wca_live_persons (
+      wca_id      VARCHAR(20)   NOT NULL,
+      person_name TEXT          NOT NULL,
+      prs_json    LONGTEXT      NOT NULL,
+      fetched_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (wca_id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
   console.log("All tables created successfully.");
   await pool.end();
 }
