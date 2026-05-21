@@ -13,8 +13,12 @@
  */
 
 import { unstable_cache } from "next/cache";
-import { getVirtualAllRanks, getPersonLocations, getRanksForPersons, getPrevBestsFromResults } from "./queries";
+import {
+  getVirtualAllRanks, getPersonLocations, getRanksForPersons,
+  getPrevBestsFromResults, getKnownCompetitionsByPerson,
+} from "./queries";
 import type { PersonPRs, PR, RankMap } from "./queries";
+import { query, execute } from "./db";
 
 const WCA_LIVE_API = "https://live.worldcubeassociation.org/api";
 const FETCH_TIMEOUT_MS = 8_000;
@@ -322,7 +326,99 @@ const getCachedCompetitionDetail = unstable_cache(
   { revalidate: 300 }
 );
 
+/**
+ * Cache-first wrapper: reads pre-fetched results from wca_live_persons if the
+ * background job has run recently (< 10 min). Falls back to direct WCA Live
+ * API calls when the cache is stale or the table is missing.
+ */
 export async function fetchLivePRsForPersons(
+  personIds: string[],
+  days: number,
+  knownCompsByPerson: Map<string, Set<string>>,
+  ranks: RankMap
+): Promise<PersonPRs[]> {
+  if (personIds.length === 0) return [];
+  try {
+    const meta = await query<{ updated_at: Date }>(
+      "SELECT updated_at FROM import_metadata WHERE `key` = 'wca_live_refreshed_at'"
+    );
+    const ageMs = meta[0]
+      ? Date.now() - new Date(meta[0].updated_at).getTime()
+      : Infinity;
+    if (ageMs < 10 * 60 * 1000) {
+      return fetchLivePRsFromCache(personIds, knownCompsByPerson);
+    }
+  } catch { /* fall through */ }
+  return fetchLivePRsDirect(personIds, days, knownCompsByPerson, ranks);
+}
+
+async function fetchLivePRsFromCache(
+  personIds: string[],
+  knownCompsByPerson: Map<string, Set<string>>
+): Promise<PersonPRs[]> {
+  const placeholders = personIds.map(() => "?").join(", ");
+  const rows = await query<{ wca_id: string; person_name: string; prs_json: string }>(
+    `SELECT wca_id, person_name, prs_json FROM wca_live_persons WHERE wca_id IN (${placeholders})`,
+    personIds
+  );
+  return rows
+    .map((r) => {
+      const allPrs = JSON.parse(r.prs_json) as PR[];
+      const prs = allPrs.filter(
+        (pr) => !knownCompsByPerson.get(r.wca_id)?.has(pr.competitionId)
+      );
+      return { personId: r.wca_id, personName: r.person_name, prs };
+    })
+    .filter((p) => p.prs.length > 0);
+}
+
+/**
+ * Fetches live PRs for all globally-followed persons and stores them in
+ * wca_live_persons so the feed API can read from DB instead of WCA Live.
+ * Called by the /api/cron/wca-live route every few minutes.
+ */
+export async function populateLiveCache(): Promise<{ updated: number }> {
+  const followed = await query<{ wca_id: string }>(
+    "SELECT DISTINCT wca_id FROM user_following"
+  );
+  if (followed.length === 0) {
+    await markCacheRefreshed();
+    return { updated: 0 };
+  }
+
+  const allIds = followed.map((r) => r.wca_id);
+  const [knownCompsByPerson, ranks] = await Promise.all([
+    getKnownCompetitionsByPerson(allIds).catch(() => new Map<string, Set<string>>()),
+    getRanksForPersons(allIds).catch(() => ({
+      single: new Map<string, number>(),
+      average: new Map<string, number>(),
+    })),
+  ]);
+
+  const results = await fetchLivePRsDirect(allIds, 3, knownCompsByPerson, ranks);
+
+  if (results.length > 0) {
+    const vals = results.map(() => "(?, ?, ?, NOW())").join(", ");
+    const params = results.flatMap((p) => [p.personId, p.personName, JSON.stringify(p.prs)]);
+    await execute(
+      `INSERT INTO wca_live_persons (wca_id, person_name, prs_json, fetched_at) VALUES ${vals}
+       ON DUPLICATE KEY UPDATE person_name = VALUES(person_name), prs_json = VALUES(prs_json), fetched_at = NOW()`,
+      params
+    );
+  }
+
+  await markCacheRefreshed();
+  return { updated: results.length };
+}
+
+async function markCacheRefreshed(): Promise<void> {
+  await execute(
+    `INSERT INTO import_metadata (\`key\`, value, updated_at) VALUES ('wca_live_refreshed_at', 'ok', NOW())
+     ON DUPLICATE KEY UPDATE value = 'ok', updated_at = NOW()`
+  );
+}
+
+async function fetchLivePRsDirect(
   personIds: string[],
   days: number,
   knownCompsByPerson: Map<string, Set<string>>,

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { EVENT_ORDER } from "@/lib/events";
 import { deduplicatePRs, type DedupedPR } from "@/lib/deduplicate";
+import { getAvatarUrl } from "@/lib/avatar-cache";
 import PRBadge, { ShareIcon } from "./PRBadge";
 import ShareModal from "./ShareModal";
 
@@ -27,13 +28,7 @@ export default function PersonCard({
   const [sharePR, setSharePR] = useState<PR | null>(null);
 
   useEffect(() => {
-    fetch(`https://www.worldcubeassociation.org/api/v0/persons/${person.personId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const thumb = data?.person?.avatar?.thumb_url;
-        if (thumb) setAvatarUrl(thumb);
-      })
-      .catch(() => {});
+    getAvatarUrl(person.personId).then((url) => { if (url) setAvatarUrl(url); });
   }, [person.personId]);
 
   const dedupedPRs = deduplicatePRs(person.prs);

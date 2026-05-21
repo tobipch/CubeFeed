@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import type { PersonPRs, PR } from "@/lib/queries";
 import { formatPRDate, effectivePRDate } from "@/lib/format";
 import { deduplicatePRs } from "@/lib/deduplicate";
+import { getAvatarUrl } from "@/lib/avatar-cache";
 import PRBadge from "./PRBadge";
 import ShareModal from "./ShareModal";
 
@@ -74,13 +75,9 @@ export default function ChronologicalFeed({
 
   useEffect(() => {
     for (const id of uniquePersonIds) {
-      fetch(`https://www.worldcubeassociation.org/api/v0/persons/${id}`)
-        .then((r) => r.json())
-        .then((d) => {
-          const thumb = d?.person?.avatar?.thumb_url;
-          if (thumb) setAvatarMap((prev) => ({ ...prev, [id]: thumb }));
-        })
-        .catch(() => {});
+      getAvatarUrl(id).then((url) => {
+        if (url) setAvatarMap((prev) => ({ ...prev, [id]: url }));
+      });
     }
   }, [uniquePersonIds]);
 

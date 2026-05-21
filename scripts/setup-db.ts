@@ -255,6 +255,16 @@ async function main() {
     ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
   `);
 
+  await exec(`
+    CREATE TABLE IF NOT EXISTS wca_live_persons (
+      wca_id      VARCHAR(20)   NOT NULL,
+      person_name TEXT          NOT NULL,
+      prs_json    LONGTEXT      NOT NULL,
+      fetched_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (wca_id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
   console.log("All tables created successfully.");
   await pool.end();
 }
