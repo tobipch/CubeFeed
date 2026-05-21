@@ -266,6 +266,7 @@ function FeedRow({
             src={avatarUrl}
             alt={personName}
             className="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200 shrink-0"
+            loading="lazy"
           />
         ) : (
           <div className="w-7 h-7 rounded-full bg-gray-100 shrink-0" />

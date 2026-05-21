@@ -111,6 +111,7 @@ export default function PersonCard({
               src={avatarUrl}
               alt={person.personName}
               className="w-10 h-10 rounded-full object-cover ring-1 ring-gray-200"
+              loading="lazy"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse" />

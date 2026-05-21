@@ -19,7 +19,7 @@ function WcaAvatar({ wcaId, name }: { wcaId: string; name: string }) {
   }, [wcaId]);
   if (!url) return <div className="w-7 h-7 rounded-full bg-gray-100 shrink-0" />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt={name} className="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200 shrink-0" />;
+  return <img src={url} alt={name} className="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200 shrink-0" loading="lazy" />;
 }
 
 interface FollowedPerson {
@@ -441,6 +441,7 @@ function UserWidget({
             src={user.wca_avatar_url}
             alt={displayName}
             className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+            loading="lazy"
           />
         )}
         <span className="text-sm text-gray-600 hidden sm:block">
