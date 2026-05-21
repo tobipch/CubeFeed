@@ -12,7 +12,7 @@ function createPool(): Pool {
     database: process.env.MYSQL_DATABASE,
     port: Number(process.env.MYSQL_PORT ?? 3306),
     waitForConnections: true,
-    connectionLimit: 5,
+    connectionLimit: 15,
     charset: "utf8mb4",
     ssl: { rejectUnauthorized: false },
   });

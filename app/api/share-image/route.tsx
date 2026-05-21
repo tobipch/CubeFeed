@@ -77,6 +77,26 @@ function stripeColor(record: string) {
   return "#00c853";
 }
 
+function fmtAbsDate(s: string): string {
+  const d = new Date(s + "T00:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatShareDate(pr: PR): string {
+  const fsDate = pr.firstSeenAt?.slice(0, 10);
+  const rangeStart = pr.startDate ?? pr.endDate;
+  if (fsDate && fsDate >= rangeStart && fsDate <= pr.endDate) return fmtAbsDate(fsDate);
+  if (pr.startDate && pr.startDate !== pr.endDate) {
+    const s = new Date(pr.startDate + "T00:00:00");
+    const e = new Date(pr.endDate + "T00:00:00");
+    const month = s.toLocaleDateString("en-US", { month: "short" });
+    return s.getMonth() === e.getMonth()
+      ? `${month} ${s.getDate()}–${e.getDate()}`
+      : `${fmtAbsDate(pr.startDate)} – ${fmtAbsDate(pr.endDate)}`;
+  }
+  return fmtAbsDate(pr.endDate);
+}
+
 // ---------- image dimensions ----------
 
 const S = 2; // scale factor — multiply all pixel values for 2× resolution
@@ -245,7 +265,7 @@ export async function POST(req: NextRequest) {
                     gap: 5 * S,
                   }}
                 >
-                  {/* Row 1: event + type + competition */}
+                  {/* Row 1: event + type + competition + date */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6 * S }}>
                     <span style={{ fontSize: 12 * S, fontWeight: 600, color: "#374151" }}>
                       {eventName(pr.eventId)}
@@ -253,8 +273,11 @@ export async function POST(req: NextRequest) {
                     <span style={{ fontSize: 11 * S, fontWeight: 600, color: typeColor }}>
                       {typeLabel(pr.eventId, pr.type)}
                     </span>
-                    <span style={{ fontSize: 11 * S, color: "#9ca3af" }}>
+                    <span style={{ fontSize: 11 * S, color: "#9ca3af", flex: 1 }}>
                       {pr.competitionName}
+                    </span>
+                    <span style={{ fontSize: 11 * S, color: "#9ca3af", flexShrink: 0, marginLeft: 4 * S }}>
+                      {formatShareDate(pr)}
                     </span>
                   </div>
 

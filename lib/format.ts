@@ -1,3 +1,54 @@
+export function formatPRDate(dateStr: string): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr + "T00:00:00");
+  const diffDays = Math.round((today.getTime() - d.getTime()) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays <= 6) return `${diffDays}d ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/**
+ * The date to treat as the PR's "actual" day. Prefers `firstSeenAt` (precise
+ * day from live detection) over `endDate` (only the last day of the comp).
+ */
+export function effectivePRDate(pr: { endDate: string; firstSeenAt?: string }): string {
+  return pr.firstSeenAt ? pr.firstSeenAt.slice(0, 10) : pr.endDate;
+}
+
+/**
+ * Renders the date for a PR card.
+ * Uses firstSeenAt only when it falls within the competition date range — this
+ * gives precise "day 1 of a multi-day comp" when live, but ignores stale
+ * firstSeenAt values that were recorded after the competition already ended.
+ */
+export function formatPRDateForDisplay(pr: {
+  startDate?: string;
+  endDate: string;
+  firstSeenAt?: string;
+}): string {
+  const fsDate = pr.firstSeenAt?.slice(0, 10);
+  const rangeStart = pr.startDate ?? pr.endDate;
+  if (fsDate && fsDate >= rangeStart && fsDate <= pr.endDate) {
+    return formatPRDate(fsDate);
+  }
+  if (!pr.startDate || pr.startDate === pr.endDate) return formatPRDate(pr.endDate);
+  return formatDateRange(pr.startDate, pr.endDate);
+}
+
+function formatDateRange(startDate: string, endDate: string): string {
+  const start = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
+  if (startDate.slice(0, 7) === endDate.slice(0, 7)) {
+    const month = start.toLocaleDateString("en-US", { month: "short" });
+    return `${month} ${start.getDate()}–${end.getDate()}`;
+  }
+  const startStr = start.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const endStr = end.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${startStr} – ${endStr}`;
+}
+
 export function formatTime(
   cs: number,
   eventId: string,

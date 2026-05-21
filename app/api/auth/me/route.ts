@@ -10,6 +10,7 @@ export async function GET() {
       wca_id: user.wca_id ?? null,
       wca_name: user.wca_name ?? null,
       wca_avatar_url: user.wca_avatar_url ?? null,
+      last_feed_visit: user.last_feed_visit ?? null,
     });
   } catch {
     return Response.json(null);

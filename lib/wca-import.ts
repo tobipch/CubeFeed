@@ -350,16 +350,17 @@ export async function runWcaImport(): Promise<void> {
     await importRanks(pool, findTsv("ranks_single"),  "ranks_single",  personCountryMap, personContinentMap);
     await importRanks(pool, findTsv("ranks_average"), "ranks_average", personCountryMap, personContinentMap);
 
-    // Fix any NULL continent_id values by joining ranks with persons + countries tables.
-    // This handles athletes missed by the in-memory personContinentMap (e.g. new competitors).
-    console.log("Fixing NULL continent_id in ranks tables...");
+    // Fix any NULL or empty continent_id values by joining ranks with
+    // persons + countries tables. This handles athletes missed by the
+    // in-memory personContinentMap (e.g. new competitors) as well as rows
+    // that got an empty string written during a previous import.
+    console.log("Fixing NULL/empty continent_id in ranks tables...");
     for (const table of ["ranks_single", "ranks_average"] as const) {
       await pool.execute(
         `UPDATE ${table} r
-         JOIN persons p ON r.person_id = p.wca_id AND p.sub_id = 1
-         JOIN countries c ON p.country_id = c.id
+         JOIN countries c ON r.country_id = c.id
          SET r.continent_id = c.continent_id
-         WHERE r.continent_id IS NULL`
+         WHERE r.continent_id IS NULL OR r.continent_id = ''`
       );
     }
     console.log("  Done");
