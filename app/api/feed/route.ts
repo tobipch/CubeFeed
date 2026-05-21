@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   const idsParam = searchParams.get("ids") ?? "";
   const daysParam = Number(searchParams.get("days"));
 
-  const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean);
+  // Sort IDs so the same set in any order hits the same Vercel edge-cache entry.
+  const ids = [...new Set(idsParam.split(",").map((s) => s.trim()).filter(Boolean))].sort();
   if (ids.length === 0) return Response.json([]);
   if (ids.length > MAX_PERSONS) {
     return Response.json({ error: "Too many person IDs" }, { status: 400 });
@@ -39,7 +40,14 @@ export async function GET(req: NextRequest) {
 
   const merged = mergeFeed(dbPersons, livePRs);
   await attachFirstSeen(merged, ids).catch(() => {});
-  return Response.json(merged);
+
+  // Let Vercel's edge cache serve this response for up to 60 s, then
+  // revalidate in the background for the next 5 minutes (stale-while-revalidate).
+  return Response.json(merged, {
+    headers: {
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+    },
+  });
 }
 
 function mergeFeed(db: PersonPRs[], live: PersonPRs[]): PersonPRs[] {

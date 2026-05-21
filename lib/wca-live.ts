@@ -339,13 +339,17 @@ export async function fetchLivePRsForPersons(
     return [];
   }
 
+  // Skip competitions that ended more than 3 days ago — those results should
+  // already be in the WCA DB export by now, so live-fetching them is wasted work.
+  const recentCutoff = isoDateMinus(3);
+
   // Include a competition if it has no wca_id (never in DB) OR if at least one
   // followed person doesn't yet have DB results for it.
-  const liveComps = competitions.filter(
-    (c) =>
-      !c.wca_id ||
-      personIds.some((id) => !knownCompsByPerson.get(id)?.has(c.wca_id!))
-  );
+  const liveComps = competitions.filter((c) => {
+    const endDate = c.end_date ?? c.start_date;
+    if (endDate < recentCutoff) return false;
+    return !c.wca_id || personIds.some((id) => !knownCompsByPerson.get(id)?.has(c.wca_id!));
+  });
   if (liveComps.length === 0) return [];
 
   const personMap = new Map<string, PersonPRs>();

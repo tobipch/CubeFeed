@@ -335,9 +335,8 @@ export default function FollowingFeed() {
       />
 
       {following.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 mt-6">
-          {viewMode === "person" && <DaysSelector current={days} options={VALID_DAYS} />}
-          {/* View toggle */}
+        <div className="flex flex-wrap items-center gap-3 mb-6 mt-6">
+          {/* View toggle — always leftmost */}
           <div className="flex gap-0.5 border border-gray-200 rounded-lg p-0.5 bg-gray-50 shrink-0">
             <button
               type="button"
@@ -369,14 +368,17 @@ export default function FollowingFeed() {
               Feed
             </button>
           </div>
+          {/* Summary text */}
           {!loading && persons !== null && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 flex-1">
               <span className="font-semibold text-gray-800">{totalPRs}</span> PRs from{" "}
               <span className="font-semibold text-gray-800">{cubersWithPRs}</span> cuber{cubersWithPRs !== 1 ? "s" : ""}{" "}
               in the last{" "}
               <span className="font-semibold text-gray-800">{effectiveDays}</span> days
             </p>
           )}
+          {/* Days selector — right side, person view only */}
+          {viewMode === "person" && <DaysSelector current={days} options={VALID_DAYS} />}
         </div>
       )}
 
