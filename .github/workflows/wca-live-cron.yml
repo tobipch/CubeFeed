@@ -1,0 +1,22 @@
+name: WCA Live Cache Refresh
+
+on:
+  schedule:
+    # Every 5 minutes (GitHub Actions minimum interval)
+    - cron: "*/5 * * * *"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger cache refresh
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "${{ secrets.CRON_URL }}/api/cron/wca-live" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "Response status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Unexpected status $STATUS"
+            exit 1
+          fi
