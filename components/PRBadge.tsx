@@ -25,21 +25,31 @@ export default function PRBadge({
   onShare?: () => void;
 }) {
   const badgeRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const [seenInView, setSeenInView] = useState(false);
 
   useEffect(() => {
-    if (!isNew || !badgeRef.current) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setSeenInView(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.8 }
-    );
-    observer.observe(badgeRef.current);
-    return () => observer.disconnect();
+    if (!isNew) return;
+    // Delay before observing so badges visible on initial load stay shown
+    // briefly; elements scrolled into view after the delay fade out normally.
+    const timer = setTimeout(() => {
+      if (!badgeRef.current) return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            setSeenInView(true);
+            obs.disconnect();
+          }
+        },
+        { threshold: 0.8 }
+      );
+      obs.observe(badgeRef.current);
+      observerRef.current = obs;
+    }, 1500);
+    return () => {
+      clearTimeout(timer);
+      observerRef.current?.disconnect();
+    };
   }, [isNew]);
 
   const showNewBadge = isNew && !seenInView;

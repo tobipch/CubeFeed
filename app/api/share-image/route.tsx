@@ -83,6 +83,9 @@ function fmtAbsDate(s: string): string {
 }
 
 function formatShareDate(pr: PR): string {
+  const fsDate = pr.firstSeenAt?.slice(0, 10);
+  const rangeStart = pr.startDate ?? pr.endDate;
+  if (fsDate && fsDate >= rangeStart && fsDate <= pr.endDate) return fmtAbsDate(fsDate);
   if (pr.startDate && pr.startDate !== pr.endDate) {
     const s = new Date(pr.startDate + "T00:00:00");
     const e = new Date(pr.endDate + "T00:00:00");

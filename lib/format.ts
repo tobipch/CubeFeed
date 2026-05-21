@@ -18,13 +18,21 @@ export function effectivePRDate(pr: { endDate: string; firstSeenAt?: string }): 
 }
 
 /**
- * Renders the date for a PR card. Uses competition dates, not firstSeenAt.
- * firstSeenAt reflects when CubeFeed noticed the PR (unreliable for past comps).
+ * Renders the date for a PR card.
+ * Uses firstSeenAt only when it falls within the competition date range — this
+ * gives precise "day 1 of a multi-day comp" when live, but ignores stale
+ * firstSeenAt values that were recorded after the competition already ended.
  */
 export function formatPRDateForDisplay(pr: {
   startDate?: string;
   endDate: string;
+  firstSeenAt?: string;
 }): string {
+  const fsDate = pr.firstSeenAt?.slice(0, 10);
+  const rangeStart = pr.startDate ?? pr.endDate;
+  if (fsDate && fsDate >= rangeStart && fsDate <= pr.endDate) {
+    return formatPRDate(fsDate);
+  }
   if (!pr.startDate || pr.startDate === pr.endDate) return formatPRDate(pr.endDate);
   return formatDateRange(pr.startDate, pr.endDate);
 }
