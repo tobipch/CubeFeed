@@ -9,7 +9,7 @@ import { fetchLivePRsForPersons } from "@/lib/wca-live";
 import { execute, query } from "@/lib/db";
 
 const VALID_DAYS = [3, 7, 14, 30];
-const MAX_PERSONS = 50;
+const MAX_PERSONS = 100;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
