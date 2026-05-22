@@ -9,14 +9,23 @@ import { fetchLivePRsForPersons } from "@/lib/wca-live";
 import { execute, query } from "@/lib/db";
 
 const VALID_DAYS = [3, 7, 14, 30];
-const MAX_PERSONS = 50;
+const MAX_PERSONS = 1000;
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const idsParam = searchParams.get("ids") ?? "";
-  const daysParam = Number(searchParams.get("days"));
+export async function POST(req: NextRequest) {
+  let body: { ids?: unknown; days?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  // Sort IDs so the same set in any order hits the same Vercel edge-cache entry.
+  const idsParam = Array.isArray(body.ids)
+    ? (body.ids as unknown[]).filter((x) => typeof x === "string").join(",")
+    : typeof body.ids === "string"
+    ? body.ids
+    : "";
+  const daysParam = Number(body.days);
+
   const ids = [...new Set(idsParam.split(",").map((s) => s.trim()).filter(Boolean))].sort();
   if (ids.length === 0) return Response.json([]);
   if (ids.length > MAX_PERSONS) {
@@ -41,13 +50,7 @@ export async function GET(req: NextRequest) {
   const merged = mergeFeed(dbPersons, livePRs);
   await attachFirstSeen(merged, ids).catch(() => {});
 
-  // Let Vercel's edge cache serve this response for up to 60 s, then
-  // revalidate in the background for the next 5 minutes (stale-while-revalidate).
-  return Response.json(merged, {
-    headers: {
-      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-    },
-  });
+  return Response.json(merged);
 }
 
 function mergeFeed(db: PersonPRs[], live: PersonPRs[]): PersonPRs[] {
