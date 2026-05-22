@@ -387,10 +387,10 @@ export default function FollowingFeed() {
           {/* Summary text */}
           {!loading && persons !== null && (
             <p className="text-sm text-gray-500 flex-1">
-              <span className="font-semibold text-gray-800">{totalPRs}</span> PRs from{" "}
-              <span className="font-semibold text-gray-800">{cubersWithPRs}</span> cuber{cubersWithPRs !== 1 ? "s" : ""}{" "}
-              in the last{" "}
-              <span className="font-semibold text-gray-800">{effectiveDays}</span> days
+              <span className="font-semibold text-gray-800">{totalPRs}</span> PRs
+              {" · "}
+              <span className="font-semibold text-gray-800">{cubersWithPRs}</span>{" "}
+              cuber{cubersWithPRs !== 1 ? "s" : ""}
             </p>
           )}
           {/* Days selector — right side, person view only */}

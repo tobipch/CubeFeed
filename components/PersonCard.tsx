@@ -93,7 +93,7 @@ export default function PersonCard({
         >
           {person.personName}
         </a>
-        <span className="text-xs text-gray-400 font-mono shrink-0">
+        <span className="text-xs text-gray-400 font-mono shrink-0 hidden sm:inline">
           {person.personId}
         </span>
         <div className="ml-auto flex items-center gap-2 shrink-0">
