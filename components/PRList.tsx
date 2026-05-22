@@ -128,7 +128,7 @@ export default function PRList({ persons, isLoggedIn, onLoginRequired }: Props) 
           )}
         </div>
       )}
-      <JumpNav persons={filtered} />
+      {filtered.length > 3 && <JumpNav persons={filtered} />}
       <div className="space-y-4">
         {filtered.map((person) => (
           <PersonCard

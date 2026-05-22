@@ -249,6 +249,21 @@ export default function FollowingFeed() {
     [saveFollowing]
   );
 
+  const addPersons = useCallback(
+    (persons: FollowedPerson[]) => {
+      setFollowing((prev) => {
+        const newOnes = persons.filter(
+          (p) => !prev.some((e) => e.wcaId === p.wcaId)
+        );
+        if (!newOnes.length) return prev;
+        const next = [...prev, ...newOnes];
+        saveFollowing(next);
+        return next;
+      });
+    },
+    [saveFollowing]
+  );
+
   const removePerson = useCallback(
     (wcaId: string) => {
       if (user?.wca_id && wcaId === user.wca_id) return;
@@ -331,6 +346,7 @@ export default function FollowingFeed() {
         following={following}
         userWcaId={user?.wca_id ?? null}
         onAdd={addPerson}
+        onAddMany={addPersons}
         onRemove={removePerson}
       />
 
@@ -371,10 +387,10 @@ export default function FollowingFeed() {
           {/* Summary text */}
           {!loading && persons !== null && (
             <p className="text-sm text-gray-500 flex-1">
-              <span className="font-semibold text-gray-800">{totalPRs}</span> PRs from{" "}
-              <span className="font-semibold text-gray-800">{cubersWithPRs}</span> cuber{cubersWithPRs !== 1 ? "s" : ""}{" "}
-              in the last{" "}
-              <span className="font-semibold text-gray-800">{effectiveDays}</span> days
+              <span className="font-semibold text-gray-800">{totalPRs}</span> PRs
+              {" · "}
+              <span className="font-semibold text-gray-800">{cubersWithPRs}</span>{" "}
+              cuber{cubersWithPRs !== 1 ? "s" : ""}
             </p>
           )}
           {/* Days selector — right side, person view only */}
@@ -481,11 +497,13 @@ function FollowingSection({
   following,
   userWcaId,
   onAdd,
+  onAddMany,
   onRemove,
 }: {
   following: FollowedPerson[];
   userWcaId: string | null;
   onAdd: (person: FollowedPerson) => void;
+  onAddMany: (persons: FollowedPerson[]) => void;
   onRemove: (wcaId: string) => void;
 }) {
   const [listOpen, setListOpen] = useState(false);
@@ -494,18 +512,23 @@ function FollowingSection({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
+  const [pendingPersons, setPendingPersons] = useState<FollowedPerson[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handler(e: MouseEvent) {
+    function handler(e: MouseEvent | TouchEvent) {
       const target = e.target as Node;
       if (!inputRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
         setShowSuggestions(false);
       }
     }
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, []);
 
   useEffect(() => {
@@ -535,10 +558,17 @@ function FollowingSection({
   }, [query]);
 
   function handleSelect(result: SearchResult) {
-    onAdd({ wcaId: result.wcaId, name: result.name, countryIso2: result.countryIso2 });
+    const alreadyFollowed = following.some((f) => f.wcaId === result.wcaId);
+    const alreadyPending = pendingPersons.some((p) => p.wcaId === result.wcaId);
+    if (alreadyFollowed || alreadyPending) return;
+    setPendingPersons((prev) => [
+      ...prev,
+      { wcaId: result.wcaId, name: result.name, countryIso2: result.countryIso2 },
+    ]);
     setQuery("");
     setSuggestions([]);
     setShowSuggestions(false);
+    setSearchDone(false);
     inputRef.current?.focus();
   }
 
@@ -546,7 +576,11 @@ function FollowingSection({
     if (e.key === "Enter") {
       const trimmed = query.trim().toUpperCase();
       if (/^[0-9]{4}[A-Z]{4}[0-9]{2}$/.test(trimmed)) {
-        onAdd({ wcaId: trimmed, name: trimmed });
+        const alreadyFollowed = following.some((f) => f.wcaId === trimmed);
+        const alreadyPending = pendingPersons.some((p) => p.wcaId === trimmed);
+        if (!alreadyFollowed && !alreadyPending) {
+          setPendingPersons((prev) => [...prev, { wcaId: trimmed, name: trimmed }]);
+        }
         setQuery("");
         setShowSuggestions(false);
       } else if (suggestions.length > 0) {
@@ -557,80 +591,135 @@ function FollowingSection({
     }
   }
 
+  function handleConfirm() {
+    if (!pendingPersons.length) return;
+    onAddMany(pendingPersons);
+    setPendingPersons([]);
+  }
+
   const showNoResults = showSuggestions && searchDone && !isSearching && suggestions.length === 0;
 
   const searchInput = (large: boolean) => (
-    <div className="relative">
-      <svg
-        className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${large ? "w-4 h-4" : "w-3.5 h-3.5"}`}
-        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-      >
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-        placeholder={large ? "Search for a cuber to follow…" : "Add cuber by name or WCA ID…"}
-        className={`w-full border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent placeholder:text-gray-400 ${
-          large
-            ? "pl-10 pr-10 py-3 text-base text-center"
-            : "pl-9 pr-8 py-2 text-sm"
-        }`}
-      />
-      {isSearching ? (
-        <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : query ? (
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={() => { setQuery(""); setShowSuggestions(false); inputRef.current?.focus(); }}
-          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
-        >
-          ×
-        </button>
-      ) : null}
-
-      {/* Search suggestions */}
-      {(showSuggestions || showNoResults) && (
-        <div
-          ref={dropdownRef}
-          className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden"
-        >
-          {suggestions.map((r) => {
-            const already = following.some((f) => f.wcaId === r.wcaId);
-            return (
+    <div className="flex flex-col gap-2">
+      {/* Badge row — pending persons waiting to be confirmed */}
+      {pendingPersons.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-0.5">
+          {pendingPersons.map((p) => (
+            <span
+              key={p.wcaId}
+              className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-800 text-xs font-medium pl-2 pr-1 py-0.5 rounded-full"
+            >
+              {p.countryIso2 && (
+                <span className="text-sm leading-none">{flagEmoji(p.countryIso2)}</span>
+              )}
+              <span className="max-w-[120px] truncate">{p.name}</span>
               <button
-                key={r.wcaId}
                 type="button"
-                disabled={already}
-                onClick={() => handleSelect(r)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
-                  already ? "opacity-40 cursor-not-allowed" : "hover:bg-blue-50 cursor-pointer"
-                }`}
+                aria-label={`${p.name} entfernen`}
+                onClick={() =>
+                  setPendingPersons((prev) => prev.filter((x) => x.wcaId !== p.wcaId))
+                }
+                className="ml-0.5 p-2 -m-2 text-blue-400 hover:text-blue-700 text-base leading-none flex items-center justify-center"
               >
-                <span className="text-base w-6 text-center">{flagEmoji(r.countryIso2)}</span>
-                <span className="flex-1 min-w-0">
-                  <span className="font-medium text-gray-900">{r.name}</span>
-                  <span className="text-xs text-gray-400 font-mono ml-2">{r.wcaId}</span>
-                </span>
-                <span className="text-xs text-gray-400 shrink-0">{r.countryIso2}</span>
+                ×
               </button>
-            );
-          })}
-          {showNoResults && (
-            <p className="px-4 py-3 text-sm text-gray-500">
-              No results. Enter a WCA ID directly (e.g.{" "}
-              <span className="font-mono">2015MUEL01</span>) and press Enter.
-            </p>
-          )}
+            </span>
+          ))}
         </div>
       )}
+
+      {/* Search input row + confirm button */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <svg
+            className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${large ? "w-4 h-4" : "w-3.5 h-3.5"}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+            placeholder={large ? "Search for a cuber to follow…" : "Add cuber by name or WCA ID…"}
+            inputMode="search"
+            enterKeyHint={pendingPersons.length > 0 ? "done" : "search"}
+            className={`w-full border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent placeholder:text-gray-400 ${
+              large
+                ? "pl-10 pr-10 py-3 text-base text-center"
+                : "pl-9 pr-8 py-2 text-sm"
+            }`}
+          />
+          {isSearching ? (
+            <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : query ? (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => { setQuery(""); setShowSuggestions(false); inputRef.current?.focus(); }}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+            >
+              ×
+            </button>
+          ) : null}
+
+          {/* Search suggestions */}
+          {(showSuggestions || showNoResults) && (
+            <div
+              ref={dropdownRef}
+              className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden"
+            >
+              {suggestions.map((r) => {
+                const already =
+                  following.some((f) => f.wcaId === r.wcaId) ||
+                  pendingPersons.some((p) => p.wcaId === r.wcaId);
+                return (
+                  <button
+                    key={r.wcaId}
+                    type="button"
+                    disabled={already}
+                    onClick={() => handleSelect(r)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${
+                      already ? "opacity-40 cursor-not-allowed" : "hover:bg-blue-50 cursor-pointer"
+                    }`}
+                  >
+                    <span className="text-base w-6 text-center">{flagEmoji(r.countryIso2)}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="font-medium text-gray-900">{r.name}</span>
+                      <span className="text-xs text-gray-400 font-mono ml-2">{r.wcaId}</span>
+                    </span>
+                    <span className="text-xs text-gray-400 shrink-0">{r.countryIso2}</span>
+                  </button>
+                );
+              })}
+              {showNoResults && (
+                <p className="px-4 py-3 text-sm text-gray-500">
+                  No results. Enter a WCA ID directly (e.g.{" "}
+                  <span className="font-mono">2015MUEL01</span>) and press Enter.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Confirm button — only shown when there are pending persons */}
+        {pendingPersons.length > 0 && (
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className="w-full sm:w-auto sm:shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+          >
+            {pendingPersons.length === 1
+              ? "1 Cuber folgen"
+              : `${pendingPersons.length} Cuber folgen`}
+          </button>
+        )}
+      </div>
     </div>
   );
 
@@ -640,10 +729,12 @@ function FollowingSection({
       <div className="mb-8">
         <div className="max-w-md mx-auto">
           {searchInput(true)}
-          <p className="text-center text-sm text-gray-400 mt-3">
-            Try <span className="font-medium text-gray-500">"Feliks Zemdegs"</span> or enter a WCA ID like{" "}
-            <span className="font-mono text-gray-500">2009ZEMD01</span>
-          </p>
+          {pendingPersons.length === 0 && (
+            <p className="text-center text-sm text-gray-400 mt-3">
+              Try <span className="font-medium text-gray-500">"Feliks Zemdegs"</span> or enter a WCA ID like{" "}
+              <span className="font-mono text-gray-500">2009ZEMD01</span>
+            </p>
+          )}
         </div>
       </div>
     );
@@ -669,45 +760,44 @@ function FollowingSection({
         </svg>
       </button>
 
-      {/* Collapsible list */}
+      {/* Collapsible grid */}
       {listOpen && (
-        <div className="border-t border-gray-100">
-          {following.map((f, i) => {
-            const isSelf = f.wcaId === userWcaId;
-            return (
-              <div
-                key={f.wcaId}
-                className={`flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-gray-50 ${
-                  i < following.length - 1 ? "border-b border-gray-100" : ""
-                }`}
-              >
-                <WcaAvatar wcaId={f.wcaId} name={f.name} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-medium text-sm text-gray-900 truncate">{f.name}</span>
-                    {f.countryIso2 && (
-                      <span className="text-base leading-none shrink-0">{flagEmoji(f.countryIso2)}</span>
-                    )}
+        <div className="border-t border-gray-100 p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {following.map((f) => {
+              const isSelf = f.wcaId === userWcaId;
+              return (
+                <div
+                  key={f.wcaId}
+                  className="flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg px-2 py-1.5 transition-colors min-w-0"
+                >
+                  <WcaAvatar wcaId={f.wcaId} name={f.name} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 min-w-0">
+                      {f.countryIso2 && (
+                        <span className="text-xs leading-none shrink-0">{flagEmoji(f.countryIso2)}</span>
+                      )}
+                      <span className="text-xs font-medium text-gray-800 truncate">{f.name}</span>
+                    </div>
                   </div>
-                  <div className="text-xs font-mono text-gray-400">{f.wcaId}</div>
+                  {isSelf ? (
+                    <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-medium shrink-0">
+                      You
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(f.wcaId)}
+                      aria-label={`Unfollow ${f.name}`}
+                      className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none shrink-0 p-2 -m-2 flex items-center justify-center"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
-                {isSelf ? (
-                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md font-medium shrink-0">
-                    You
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onRemove(f.wcaId)}
-                    aria-label={`Unfollow ${f.name}`}
-                    className="text-gray-300 hover:text-red-400 transition-colors text-xl leading-none shrink-0 w-7 text-center"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
