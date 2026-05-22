@@ -517,14 +517,18 @@ function FollowingSection({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handler(e: MouseEvent) {
+    function handler(e: MouseEvent | TouchEvent) {
       const target = e.target as Node;
       if (!inputRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
         setShowSuggestions(false);
       }
     }
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, []);
 
   useEffect(() => {
@@ -615,7 +619,7 @@ function FollowingSection({
                 onClick={() =>
                   setPendingPersons((prev) => prev.filter((x) => x.wcaId !== p.wcaId))
                 }
-                className="ml-0.5 text-blue-400 hover:text-blue-700 text-base leading-none w-4 text-center"
+                className="ml-0.5 p-2 -m-2 text-blue-400 hover:text-blue-700 text-base leading-none flex items-center justify-center"
               >
                 ×
               </button>
@@ -625,7 +629,7 @@ function FollowingSection({
       )}
 
       {/* Search input row + confirm button */}
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <svg
             className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${large ? "w-4 h-4" : "w-3.5 h-3.5"}`}
@@ -641,6 +645,8 @@ function FollowingSection({
             onKeyDown={handleKeyDown}
             onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
             placeholder={large ? "Search for a cuber to follow…" : "Add cuber by name or WCA ID…"}
+            inputMode="search"
+            enterKeyHint={pendingPersons.length > 0 ? "done" : "search"}
             className={`w-full border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent placeholder:text-gray-400 ${
               large
                 ? "pl-10 pr-10 py-3 text-base text-center"
@@ -706,7 +712,7 @@ function FollowingSection({
           <button
             type="button"
             onClick={handleConfirm}
-            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
+            className="w-full sm:w-auto sm:shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-xl transition-colors whitespace-nowrap"
           >
             {pendingPersons.length === 1
               ? "1 Cuber folgen"
@@ -723,10 +729,12 @@ function FollowingSection({
       <div className="mb-8">
         <div className="max-w-md mx-auto">
           {searchInput(true)}
-          <p className="text-center text-sm text-gray-400 mt-3">
-            Try <span className="font-medium text-gray-500">"Feliks Zemdegs"</span> or enter a WCA ID like{" "}
-            <span className="font-mono text-gray-500">2009ZEMD01</span>
-          </p>
+          {pendingPersons.length === 0 && (
+            <p className="text-center text-sm text-gray-400 mt-3">
+              Try <span className="font-medium text-gray-500">"Feliks Zemdegs"</span> or enter a WCA ID like{" "}
+              <span className="font-mono text-gray-500">2009ZEMD01</span>
+            </p>
+          )}
         </div>
       </div>
     );
@@ -781,7 +789,7 @@ function FollowingSection({
                       type="button"
                       onClick={() => onRemove(f.wcaId)}
                       aria-label={`Unfollow ${f.name}`}
-                      className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none shrink-0 w-5 text-center"
+                      className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none shrink-0 p-2 -m-2 flex items-center justify-center"
                     >
                       ×
                     </button>
