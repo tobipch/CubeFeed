@@ -201,7 +201,10 @@ export default function FollowingFeed() {
     setFetchError(false);
 
     const controller = new AbortController();
-    fetch(`/api/feed?ids=${encodeURIComponent(idsKey)}&days=${effectiveDays}`, {
+    fetch("/api/feed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: idsKey.split(","), days: effectiveDays }),
       signal: controller.signal,
     })
       .then((r) => {
