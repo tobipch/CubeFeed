@@ -18,7 +18,10 @@ type SqlValue = string | number | null;
 
 async function download(url: string, dest: string): Promise<void> {
   console.log(`Downloading ${url} ...`);
-  const res = await fetch(url, { redirect: "follow" });
+  const res = await fetch(url, {
+    redirect: "follow",
+    headers: { "User-Agent": "CubeFeed/1.0 (https://github.com/tobipch/cubefeed)" },
+  });
   if (!res.ok || !res.body) throw new Error(`Download failed: ${res.status} ${res.statusText}`);
   const out = createWriteStream(dest);
   await pipeline(res.body as unknown as NodeJS.ReadableStream, out);
