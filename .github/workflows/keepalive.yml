@@ -1,0 +1,65 @@
+name: Keepalive
+
+# GitHub deaktiviert Workflows mit "schedule"-Trigger automatisch, sobald ein
+# Repository 60 Tage lang inaktiv war. Dieser Workflow verhindert das:
+#   1. Er reaktiviert Workflows, die GitHub wegen Inaktivitaet abgeschaltet hat.
+#   2. Er erzeugt einen leeren Commit, wenn schon zu lange nichts gepusht wurde,
+#      und setzt damit den 60-Tage-Zaehler zurueck.
+
+on:
+  schedule:
+    # Jeden Montag um 04:17 UTC
+    - cron: "17 4 * * 1"
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write # fuer den Keepalive-Commit
+  actions: write # um deaktivierte Workflows wieder einzuschalten
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+      # Nach so vielen Tagen ohne Commit wird ein leerer Commit erzeugt.
+      # Muss deutlich unter GitHubs 60-Tage-Limit liegen.
+      MAX_AGE_DAYS: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+
+      - name: Reactivate workflows disabled due to inactivity
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Nur "disabled_inactivity" reaktivieren - manuell deaktivierte
+          # Workflows bleiben bewusst aus.
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows" --paginate \
+            --jq '.workflows[] | select(.state == "disabled_inactivity") | "\(.id)\t\(.name)"' \
+            > disabled.txt
+          if [ ! -s disabled.txt ]; then
+            echo "Keine wegen Inaktivitaet deaktivierten Workflows gefunden."
+            exit 0
+          fi
+          while IFS=$'\t' read -r id name; do
+            echo "Reaktiviere: $name (id $id)"
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/enable"
+          done < disabled.txt
+
+      - name: Push keepalive commit if the repository has been quiet
+        run: |
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          age=$(( (now - last) / 86400 ))
+          echo "Letzter Commit auf $DEFAULT_BRANCH: vor $age Tag(en) (Schwelle: $MAX_AGE_DAYS)."
+          if [ "$age" -lt "$MAX_AGE_DAYS" ]; then
+            echo "Genug Aktivitaet vorhanden - kein Commit noetig."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty \
+            -m "chore: keepalive commit to keep scheduled workflows enabled" \
+            -m "[skip ci]"
+          git push origin "HEAD:$DEFAULT_BRANCH"
